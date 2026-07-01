@@ -48,9 +48,10 @@ input, textarea{ font-family:inherit; }
 
 .app-header{ margin-bottom:24px; border-bottom:1px solid var(--line); padding-bottom:18px; }
 .eyebrow{ font-family:var(--font-system); font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--teal-dark); margin-bottom:10px; }
-.welcome-row{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.welcome-row{ display:flex; align-items:center; gap:8px; margin-bottom:2px; }
 .welcome-text{ font-size:15px; color:var(--ink-soft); }
 .teacher-name{ font-weight:700; color:var(--ink); }
+.welcome-subline{ font-size:13px; color:var(--ink-soft); margin-bottom:10px; }
 .app-title{ font-family:var(--font-system); font-weight:700; font-size:26px; color:var(--ink); letter-spacing:-0.02em; }
 .app-subtitle{ color:var(--ink-soft); font-size:14px; margin-top:4px; }
 
@@ -81,8 +82,8 @@ input, textarea{ font-family:inherit; }
 .student-tab{
   background:var(--white); border:1px solid var(--line); border-left:3px solid var(--teal);
   border-radius:var(--radius); box-shadow:var(--shadow-soft);
-  display:flex; flex-direction:column; overflow:hidden;
-  transition:transform .12s ease, box-shadow .12s ease;
+  display:flex; flex-direction:column; overflow:hidden; cursor:grab;
+  transition:transform .12s ease, box-shadow .12s ease, opacity .12s ease;
 }
 .student-tab:hover{ transform:translateY(-2px); box-shadow:var(--shadow); }
 .student-tab-main{
@@ -90,9 +91,13 @@ input, textarea{ font-family:inherit; }
   display:flex; flex-direction:column; gap:3px; width:100%;
 }
 .student-tab-main:hover{ background:var(--paper-dark); }
-.tab-name{ font-family:var(--font-system); font-weight:600; font-size:17px; color:var(--ink); letter-spacing:-0.01em; }
+.tab-name{ font-family:var(--font-system); font-weight:600; font-size:17px; color:var(--ink); letter-spacing:-0.01em; display:flex; align-items:center; gap:6px; }
 .tab-meta{ font-family:var(--font-system); font-size:12px; color:var(--ink-soft); }
 .student-tab-actions{ display:flex; gap:8px; padding:8px 16px 12px; border-top:1px solid var(--paper-dark); }
+
+.drag-handle{ display:inline-flex; color:var(--ink-soft); flex:0 0 auto; }
+.dragging{ opacity:0.4; }
+.drag-over{ outline:2px dashed var(--teal); outline-offset:2px; }
 
 .add-form, .edit-form{ border-left:3px solid var(--gold); gap:10px; padding:14px 16px; }
 .form-actions{ display:flex; gap:8px; }
@@ -139,7 +144,7 @@ input, textarea{ font-family:inherit; }
 .student-edit-input{ max-width:220px; }
 
 .session-list{ display:flex; flex-direction:column; gap:8px; }
-.session-row{ background:var(--white); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; }
+.session-row{ background:var(--white); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; cursor:grab; transition:opacity .12s ease; }
 .session-summary{
   width:100%; background:none; border:none; display:flex; align-items:center;
   justify-content:space-between; gap:10px; padding:12px 16px; text-align:left;
@@ -156,6 +161,12 @@ input, textarea{ font-family:inherit; }
 .chip-correct{ background:var(--correct-bg); color:var(--correct); }
 .chip-wrong{ background:var(--wrong-bg); color:var(--wrong); }
 .chip-neutral{ background:var(--paper-dark); color:var(--ink-soft); }
+
+/* ---------- Quick review ---------- */
+.review-list{ display:flex; flex-direction:column; gap:10px; }
+.review-item{ background:var(--white); border:1px solid var(--line); border-left:3px solid var(--gold); border-radius:var(--radius); padding:14px 16px; }
+.review-word{ font-family:var(--font-system); font-weight:700; font-size:17px; color:var(--ink); display:flex; align-items:center; gap:8px; }
+.review-answer{ font-size:14px; color:var(--ink-soft); margin-top:4px; }
 
 /* ---------- Lesson setup ---------- */
 .setup-title{ font-family:var(--font-system); font-size:19px; font-weight:700; color:var(--ink); letter-spacing:-0.01em; }
@@ -315,6 +326,9 @@ var GOOGLE_DRIVE_MCP_URL = 'https://drivemcp.googleapis.com/mcp/v1';
 
 var ICON_EDIT = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>';
 var ICON_DELETE = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+var ICON_DRAG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
+
+var dragState = { kind: null, index: null };
 
 /* ============ State ============ */
 var state = {
@@ -323,6 +337,7 @@ var state = {
   currentStudentId: null,
   sessions: [],
   expandedSessionId: null,
+  reviewWords: [],
   lessonName: '',
   contentSource: 'paste',
   contentText: '',
@@ -411,6 +426,61 @@ function getGreeting(){
   if(h < 18) return 'Good afternoon';
   return 'Good evening';
 }
+var ENCOURAGEMENTS = [
+  'Here is to a smooth day of lessons.',
+  'One class at a time.',
+  'Everything is set up and ready when you are.',
+  'A good day for steady progress.',
+  'Small steps add up - keep going.',
+  'Ready when you are.',
+  'Today is another chance to help someone improve.',
+  'Consistency is what makes the difference.',
+  'Nice work showing up for your students, day after day.',
+  'Nothing fancy today - just good, steady teaching.'
+];
+function getEncouragement(){
+  var now = new Date();
+  var start = new Date(now.getFullYear(), 0, 0);
+  var dayOfYear = Math.floor((now - start) / 86400000);
+  return ENCOURAGEMENTS[dayOfYear % ENCOURAGEMENTS.length];
+}
+
+/* ============ Drag-to-reorder (students & lessons) ============ */
+function handleDragStart(e, kind, index){
+  dragState.kind = kind;
+  dragState.index = index;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(index));
+  e.currentTarget.classList.add('dragging');
+}
+function handleDragEnd(e){
+  e.currentTarget.classList.remove('dragging');
+  dragState.kind = null;
+  dragState.index = null;
+}
+function handleDragEnter(e){ e.currentTarget.classList.add('drag-over'); }
+function handleDragLeave(e){ e.currentTarget.classList.remove('drag-over'); }
+function handleDragOver(e){
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+async function handleDrop(e, kind, targetIndex){
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  var sourceIndex = dragState.index;
+  if(dragState.kind !== kind || sourceIndex === null || sourceIndex === targetIndex) return;
+
+  if(kind === 'student'){
+    var movedStudent = state.students.splice(sourceIndex, 1)[0];
+    state.students.splice(targetIndex, 0, movedStudent);
+    await saveStudents(state.students);
+  } else if(kind === 'session'){
+    var movedSession = state.sessions.splice(sourceIndex, 1)[0];
+    state.sessions.splice(targetIndex, 0, movedSession);
+    await saveSessions(state.currentStudentId, state.sessions);
+  }
+  render();
+}
 
 /* ============ Render dispatch ============ */
 function render(){
@@ -418,6 +488,7 @@ function render(){
   var html = '';
   if(state.view === 'home') html = renderHome();
   else if(state.view === 'studentDetail') html = renderStudentDetail();
+  else if(state.view === 'lessonReview') html = renderLessonReview();
   else if(state.view === 'newLesson') html = renderNewLesson();
   else if(state.view === 'deck') html = renderDeckView();
   else if(state.view === 'results') html = renderResults();
@@ -432,7 +503,7 @@ function render(){
 
 /* ============ Home / roster ============ */
 function renderHome(){
-  var tiles = state.students.map(function(s){
+  var tiles = state.students.map(function(s, i){
     if(state.editingStudentId === s.id){
       return '<div class="student-tab edit-form">' +
         '<input type="text" id="editStudentInput" class="text-input" value="' + esc(state.editStudentName) + '" oninput="state.editStudentName=this.value" onkeydown="if(event.key===\'Enter\')confirmEditStudent()" />' +
@@ -442,9 +513,12 @@ function renderHome(){
         '</div>' +
       '</div>';
     }
-    return '<div class="student-tab">' +
+    return '<div class="student-tab" draggable="true"' +
+      ' ondragstart="handleDragStart(event,\'student\',' + i + ')" ondragend="handleDragEnd(event)"' +
+      ' ondragover="handleDragOver(event)" ondragenter="handleDragEnter(event)" ondragleave="handleDragLeave(event)"' +
+      ' ondrop="handleDrop(event,\'student\',' + i + ')">' +
       '<button class="student-tab-main" onclick="openStudent(\'' + s.id + '\')">' +
-        '<span class="tab-name">' + esc(s.name) + '</span>' +
+        '<span class="tab-name"><span class="drag-handle">' + ICON_DRAG + '</span>' + esc(s.name) + '</span>' +
         '<span class="tab-meta">Added ' + formatDate(s.createdAt) + '</span>' +
       '</button>' +
       '<div class="student-tab-actions">' +
@@ -465,7 +539,8 @@ function renderHome(){
 
   var welcomeHtml = '<div class="welcome-row">' +
     '<span class="welcome-text">' + getGreeting() + ', <span class="teacher-name">Teacher Amy</span></span>' +
-  '</div>';
+  '</div>' +
+  '<div class="welcome-subline">' + esc(getEncouragement()) + '</div>';
 
   return '<div class="screen home-screen">' +
     '<div class="app-header">' +
@@ -570,10 +645,10 @@ function renderStudentDetail(){
   if(!student){
     return '<div class="screen"><p>Student not found.</p><button class="link-btn" onclick="goHome()">← Back</button></div>';
   }
-  var sessions = state.sessions.slice().sort(function(a,b){ return b.date - a.date; });
+  var sessions = state.sessions;
   var avg = sessions.length ? Math.round(sessions.reduce(function(sum,s){ return sum + s.score; }, 0) / sessions.length) : null;
 
-  var rows = sessions.map(function(s){
+  var rows = sessions.map(function(s, i){
     var expanded = state.expandedSessionId === s.id;
     var detailHtml = '';
     if(expanded){
@@ -583,8 +658,12 @@ function renderStudentDetail(){
         }).join('') +
       '</div>';
     }
-    return '<div class="session-row">' +
+    return '<div class="session-row" draggable="true"' +
+      ' ondragstart="handleDragStart(event,\'session\',' + i + ')" ondragend="handleDragEnd(event)"' +
+      ' ondragover="handleDragOver(event)" ondragenter="handleDragEnter(event)" ondragleave="handleDragLeave(event)"' +
+      ' ondrop="handleDrop(event,\'session\',' + i + ')">' +
       '<button class="session-summary" onclick="toggleSession(\'' + s.id + '\')">' +
+        '<span class="drag-handle">' + ICON_DRAG + '</span>' +
         '<span class="session-date">' + formatDate(s.date) + '</span>' +
         '<span class="session-name">' + esc(s.lessonName) + '</span>' +
         '<span class="session-score">' + s.score + ' pts</span>' +
@@ -626,15 +705,61 @@ function toggleSession(id){
 }
 
 /* ============ New lesson setup ============ */
+function getReviewWords(){
+  var byDate = state.sessions.slice().sort(function(a,b){ return b.date - a.date; });
+  var seen = {};
+  var result = [];
+  byDate.forEach(function(s){
+    (s.details || []).forEach(function(d){
+      var key = (d.word || '').toLowerCase();
+      if(!key || seen[key]) return;
+      seen[key] = true;
+      if(d.outcome === 'wrong'){
+        result.push(d);
+      }
+    });
+  });
+  return result.slice(0, 5);
+}
+
 function startNewLesson(){
   state.lessonName = 'New Lesson ' + formatDate(Date.now());
   state.contentSource = 'paste';
   state.contentText = '';
   state.driveLink = '';
   state.error = null;
-  state.view = 'newLesson';
+  var reviewWords = getReviewWords();
+  if(reviewWords.length > 0){
+    state.reviewWords = reviewWords;
+    state.view = 'lessonReview';
+  } else {
+    state.view = 'newLesson';
+  }
   render();
 }
+function backFromReview(){ state.view = 'studentDetail'; render(); }
+function continueToNewLesson(){ state.view = 'newLesson'; render(); }
+
+function renderLessonReview(){
+  var student = state.students.find(function(s){ return s.id === state.currentStudentId; });
+  var itemsHtml = state.reviewWords.map(function(d){
+    var posTag = d.partOfSpeech ? '<span class="pos-tag">' + esc(d.partOfSpeech) + '</span>' : '';
+    var answer = d.standardAnswer || d.explanation || 'No definition saved for this word.';
+    return '<div class="review-item">' +
+      '<div class="review-word">' + esc(d.word) + ' ' + posTag + '</div>' +
+      '<div class="review-answer">' + esc(answer) + '</div>' +
+    '</div>';
+  }).join('');
+
+  return '<div class="screen review-screen">' +
+    '<button class="link-btn" onclick="backFromReview()">← Back</button>' +
+    '<div class="setup-title">Quick review for ' + esc(student ? student.name : '') + '</div>' +
+    '<p class="app-subtitle">A few words missed last time, worth a quick revisit before you start the new lesson.</p>' +
+    '<div class="review-list">' + itemsHtml + '</div>' +
+    '<button class="btn btn-teal btn-generate" onclick="continueToNewLesson()">Continue to New Lesson</button>' +
+  '</div>';
+}
+
 function backFromNewLesson(){ state.view = 'studentDetail'; render(); }
 function setContentSource(t){ state.contentSource = t; state.error = null; render(); }
 
@@ -959,10 +1084,19 @@ function proceedNext(){
 
 async function finishSession(){
   var details = state.deck.map(function(c){
-    return { word: c.word, outcome: c.outcome, partOfSpeech: c.partOfSpeech };
+    return {
+      word: c.word,
+      outcome: c.outcome,
+      partOfSpeech: c.partOfSpeech,
+      prompt: c.prompt,
+      standardAnswer: c.standardAnswer,
+      hint: c.hint,
+      explanation: c.explanation,
+      contextSentence: c.contextSentence
+    };
   });
   var record = { id: uid(), date: Date.now(), lessonName: state.lessonName, score: state.score, details: details };
-  state.sessions = state.sessions.concat([record]);
+  state.sessions = [record].concat(state.sessions);
   await saveSessions(state.currentStudentId, state.sessions);
   state.view = 'results';
   render();
