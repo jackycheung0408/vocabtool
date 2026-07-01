@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Vocab Card Classroom</title>
+<style>
+:root{
+  --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  --paper:#F5F4F0;
+  --paper-dark:#E9E7DF;
+  --ink:#1E2530;
+  --ink-soft:#5C6472;
+  --rule:#DADDD9;
+  --line:#D9DCD5;
+  --correct:#2F6B52;
+  --correct-bg:#E4EFE8;
+  --wrong:#A8402F;
+  --wrong-bg:#F3E7E3;
+  --hint-bg:#EFEAD9;
+  --hint-ink:#6B5A2E;
+  --gold:#96712E;
+  --gold-bg:#F1E7D3;
+  --teal:#25525A;
+  --teal-dark:#183B41;
+  --white:#FFFFFF;
+  --shadow: 0 8px 20px rgba(20,26,33,0.10);
+  --shadow-soft: 0 2px 8px rgba(20,26,33,0.06);
+  --radius: 10px;
+}
+
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; }
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--font-system);
+  font-size:15px;
+  line-height:1.5;
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+button{ font-family:inherit; cursor:pointer; }
+input, textarea{ font-family:inherit; }
+:focus-visible{ outline:2px solid var(--teal); outline-offset:2px; }
+
+.app-shell{ max-width:760px; margin:0 auto; padding:32px 20px 60px; }
+
+.app-header{ margin-bottom:24px; border-bottom:1px solid var(--line); padding-bottom:18px; }
+.eyebrow{ font-family:var(--font-system); font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--teal-dark); margin-bottom:10px; }
+.welcome-row{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.welcome-text{ font-size:15px; color:var(--ink-soft); }
+.teacher-name{ font-weight:700; color:var(--ink); }
+.app-title{ font-family:var(--font-system); font-weight:700; font-size:26px; color:var(--ink); letter-spacing:-0.02em; }
+.app-subtitle{ color:var(--ink-soft); font-size:14px; margin-top:4px; }
+
+.screen{ display:flex; flex-direction:column; gap:18px; }
+
+.link-btn{
+  align-self:flex-start; background:none; border:none; color:var(--teal-dark);
+  font-family:var(--font-system); font-size:13px; font-weight:600;
+  padding:6px 0;
+}
+.link-btn:hover{ text-decoration:underline; }
+
+.icon-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:30px; height:30px; border-radius:8px; border:none; flex:0 0 auto;
+  background:var(--paper-dark); color:var(--ink-soft);
+}
+.icon-btn svg{ display:block; }
+.icon-btn:hover{ background:var(--rule); color:var(--ink); }
+.icon-btn-danger:hover{ background:var(--wrong-bg); color:var(--wrong); }
+
+/* ---------- Home / roster ---------- */
+.section-toolbar{ display:flex; align-items:center; justify-content:space-between; }
+.section-title{ font-family:var(--font-system); font-size:15px; font-weight:700; color:var(--ink); display:flex; align-items:center; gap:8px; }
+.count-badge{ font-family:var(--font-system); font-size:12px; font-weight:600; color:var(--ink-soft); background:var(--paper-dark); padding:2px 9px; border-radius:20px; }
+
+.tab-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(210px,1fr)); gap:12px; }
+.student-tab{
+  background:var(--white); border:1px solid var(--line); border-left:3px solid var(--teal);
+  border-radius:var(--radius); box-shadow:var(--shadow-soft);
+  display:flex; flex-direction:column; overflow:hidden;
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.student-tab:hover{ transform:translateY(-2px); box-shadow:var(--shadow); }
+.student-tab-main{
+  background:none; border:none; text-align:left; padding:15px 16px 10px;
+  display:flex; flex-direction:column; gap:3px; width:100%;
+}
+.student-tab-main:hover{ background:var(--paper-dark); }
+.tab-name{ font-family:var(--font-system); font-weight:600; font-size:17px; color:var(--ink); letter-spacing:-0.01em; }
+.tab-meta{ font-family:var(--font-system); font-size:12px; color:var(--ink-soft); }
+.student-tab-actions{ display:flex; gap:8px; padding:8px 16px 12px; border-top:1px solid var(--paper-dark); }
+
+.add-form, .edit-form{ border-left:3px solid var(--gold); gap:10px; padding:14px 16px; }
+.form-actions{ display:flex; gap:8px; }
+
+.empty-note{ color:var(--ink-soft); font-size:14px; text-align:center; margin-top:12px; }
+
+/* ---------- Buttons ---------- */
+.btn{
+  border:none; border-radius:8px; padding:11px 18px; font-weight:600; font-size:14px;
+  font-family:var(--font-system); box-shadow:none;
+  transition:filter .12s ease;
+}
+.btn:hover{ filter:brightness(1.08); }
+.btn:active{ filter:brightness(0.96); }
+.btn-teal{ background:var(--teal); color:var(--white); }
+.btn-correct{ background:var(--correct); color:var(--white); }
+.btn-wrong{ background:var(--wrong); color:var(--white); }
+.btn-ghost{ background:var(--paper-dark); color:var(--ink); }
+.btn-next{ background:var(--ink); color:var(--white); align-self:flex-end; }
+.btn-small{ padding:7px 13px; font-size:12px; }
+.btn-generate{ align-self:flex-start; padding:12px 24px; font-size:14px; }
+.btn-stamp{ background:var(--teal); color:var(--white); align-self:flex-start; }
+.btn-stamp:hover{ filter:brightness(1.08); }
+
+.answer-buttons{ display:flex; gap:10px; }
+
+/* ---------- Text inputs ---------- */
+.text-input, .text-area{
+  width:100%; border:1px solid var(--rule); border-radius:8px; padding:9px 11px;
+  background:var(--white); color:var(--ink); font-size:14px; font-family:var(--font-system);
+}
+.text-area{ min-height:160px; resize:vertical; line-height:1.6; }
+.lesson-name-input{ font-family:var(--font-system); font-size:17px; font-weight:600; }
+.file-input{ font-size:13px; }
+.hint-text{ font-size:12px; color:var(--ink-soft); margin:4px 0 0; }
+.file-preview{ font-family:var(--font-system); font-size:12px; font-weight:600; color:var(--correct); margin-top:6px; }
+
+/* ---------- Student detail ---------- */
+.student-header{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding-bottom:16px; border-bottom:1px solid var(--line); }
+.student-header-left{ display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+.student-header-actions{ display:flex; gap:8px; }
+.student-name-tag{ font-family:var(--font-system); font-size:32px; font-weight:700; color:var(--ink); letter-spacing:-0.02em; }
+.student-avg{ font-family:var(--font-system); font-size:12px; color:var(--ink-soft); }
+.student-edit-input{ max-width:220px; }
+
+.session-list{ display:flex; flex-direction:column; gap:8px; }
+.session-row{ background:var(--white); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; }
+.session-summary{
+  width:100%; background:none; border:none; display:flex; align-items:center;
+  justify-content:space-between; gap:10px; padding:12px 16px; text-align:left;
+}
+.session-summary:hover{ background:var(--paper-dark); }
+.session-date{ font-family:var(--font-system); font-size:12px; color:var(--ink-soft); min-width:82px; }
+.session-name{ flex:1; font-size:14px; }
+.session-score{ font-family:var(--font-system); font-size:13px; font-weight:600; font-variant-numeric:tabular-nums; }
+.session-detail{ padding:0 16px 14px; display:flex; flex-wrap:wrap; gap:6px; }
+
+.word-chip{
+  font-family:var(--font-system); font-size:12px; font-weight:600; padding:4px 9px; border-radius:6px;
+}
+.chip-correct{ background:var(--correct-bg); color:var(--correct); }
+.chip-wrong{ background:var(--wrong-bg); color:var(--wrong); }
+.chip-neutral{ background:var(--paper-dark); color:var(--ink-soft); }
+
+/* ---------- Lesson setup ---------- */
+.setup-title{ font-family:var(--font-system); font-size:19px; font-weight:700; color:var(--ink); letter-spacing:-0.01em; }
+.source-tabs{ display:flex; gap:4px; }
+.src-tab{
+  border:1px solid var(--rule); border-bottom:none; background:var(--paper-dark); color:var(--ink-soft);
+  border-radius:8px 8px 0 0; padding:8px 14px; font-size:13px; font-weight:600;
+  font-family:var(--font-system);
+}
+.src-tab.active{ background:var(--white); color:var(--teal-dark); }
+.source-input-area{ background:var(--white); border:1px solid var(--rule); border-radius:0 8px 8px 8px; padding:16px; }
+
+.error-banner{
+  background:var(--wrong-bg); color:var(--wrong); border-left:3px solid var(--wrong);
+  padding:10px 14px; border-radius:6px; font-size:13px;
+}
+
+/* ---------- Deck screen ---------- */
+.deck-header{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+.deck-title{ display:flex; flex-direction:column; align-items:center; text-align:center; }
+.lesson-name{ font-family:var(--font-system); font-size:17px; font-weight:700; color:var(--ink); letter-spacing:-0.01em; }
+.student-tag{ font-family:var(--font-system); font-size:12px; color:var(--ink-soft); }
+.score-tag{
+  font-family:var(--font-system); font-size:13px; font-weight:700; color:var(--white);
+  background:var(--gold); padding:6px 12px; border-radius:8px; font-variant-numeric:tabular-nums;
+}
+
+.card-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(56px, 1fr)); gap:8px; }
+.grid-slot{
+  aspect-ratio:3/4; border-radius:8px; border:1px solid var(--rule);
+  background:var(--white); color:var(--ink-soft); font-family:var(--font-system);
+  font-size:15px; font-weight:700; display:flex; align-items:center; justify-content:center;
+  transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+.grid-slot:not(:disabled):hover{ transform:translateY(-2px); box-shadow:var(--shadow-soft); border-color:var(--teal); color:var(--teal-dark); }
+.grid-slot:disabled{ cursor:default; }
+.grid-slot-correct{ background:var(--correct-bg); color:var(--correct); border-color:var(--correct-bg); font-size:19px; }
+.grid-slot-wrong{ background:var(--wrong-bg); color:var(--wrong); border-color:var(--wrong-bg); font-size:19px; }
+.grid-slot-active{ border-color:var(--teal); box-shadow:0 0 0 2px var(--teal) inset; color:var(--teal-dark); }
+
+.deck-hint{ text-align:center; color:var(--ink-soft); font-size:13px; font-family:var(--font-system); padding:20px 0; }
+
+.card-scene{ perspective:1800px; display:flex; justify-content:center; }
+.card{
+  position:relative; width:100%; max-width:520px; min-height:320px;
+  transform-style:preserve-3d;
+}
+@keyframes cardDrawIn{
+  from{ opacity:0; transform:rotateY(-90deg) scale(0.94); }
+  to{ opacity:1; transform:rotateY(0deg) scale(1); }
+}
+@keyframes cardFlipReveal{
+  from{ transform:rotateY(0deg); }
+  to{ transform:rotateY(180deg); }
+}
+.card-drawn{ animation:cardDrawIn .5s cubic-bezier(.2,.7,.3,1) both; }
+.card.flipped{ animation:cardFlipReveal .55s cubic-bezier(.4,.2,.2,1) forwards; }
+.card-face{
+  position:absolute; inset:0; backface-visibility:hidden; border-radius:12px;
+  background:var(--white); border:1px solid var(--rule); box-shadow:var(--shadow);
+  padding:26px 28px; display:flex; flex-direction:column; gap:12px;
+}
+.card-back{ transform:rotateY(180deg); }
+
+.card-word{ font-family:var(--font-system); font-weight:700; font-size:32px; color:var(--ink); letter-spacing:-0.02em; }
+.pos-tag{
+  align-self:flex-start; font-family:var(--font-system); font-size:11px; font-weight:600; color:var(--teal-dark);
+  background:var(--paper-dark); padding:3px 9px; border-radius:6px;
+}
+.card-prompt{ font-size:16px; color:var(--ink); }
+.hint-note{ background:var(--hint-bg); color:var(--hint-ink); border-radius:8px; padding:10px 12px; font-size:13px; }
+.hint-label{ font-family:var(--font-system); font-weight:700; font-size:11px; margin-right:6px; }
+
+.mark-btn{
+  width:52px; height:52px; border-radius:50%; border:none; font-size:22px; font-weight:700;
+  display:flex; align-items:center; justify-content:center; color:var(--white);
+}
+.mark-btn-correct{ background:var(--correct); }
+.mark-btn-wrong{ background:var(--wrong); }
+.mark-btn:hover{ filter:brightness(1.08); }
+.mark-btn:active{ filter:brightness(0.95); }
+
+.result-banner{ font-family:var(--font-system); font-size:13px; font-weight:700; }
+.result-correct{ color:var(--correct); }
+.result-wrong{ color:var(--wrong); }
+.standard-answer{ font-size:14px; }
+.context-line{ font-size:13px; color:var(--ink-soft); font-style:italic; }
+
+.explanation-title{ font-family:var(--font-system); font-size:12px; font-weight:700; color:var(--teal-dark); }
+.explanation-text{ font-size:15px; line-height:1.6; }
+
+/* ---------- Results ---------- */
+.results-screen{ align-items:center; text-align:center; }
+.score-card{
+  border:1px solid var(--line); border-top:4px solid var(--rule); border-radius:12px; padding:24px 40px;
+  display:flex; flex-direction:column; align-items:center; gap:2px; background:var(--white); margin:8px auto;
+}
+.score-card.grade-outstanding{ border-top-color:var(--correct); }
+.score-card.grade-great{ border-top-color:var(--teal); }
+.score-card.grade-keep-practicing{ border-top-color:var(--gold); }
+.score-card.grade-needs-review{ border-top-color:var(--wrong); }
+.score-number{ font-family:var(--font-system); font-weight:700; font-size:46px; line-height:1; color:var(--ink); font-variant-numeric:tabular-nums; letter-spacing:-0.02em; }
+.score-label{ font-family:var(--font-system); font-size:13px; font-weight:600; color:var(--ink-soft); margin-top:4px; }
+.results-lesson{ color:var(--ink-soft); font-size:13px; }
+.results-chips{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; max-width:480px; }
+.results-actions{ margin-top:8px; }
+
+/* ---------- Overlays ---------- */
+.overlay{
+  position:fixed; inset:0; background:rgba(20,26,33,0.45); display:flex;
+  align-items:center; justify-content:center; padding:20px; z-index:50;
+}
+.loading-card, .modal-card{
+  background:var(--white); border-radius:12px; padding:24px 28px; box-shadow:var(--shadow);
+  max-width:340px; text-align:center; display:flex; flex-direction:column; gap:14px;
+  font-family:var(--font-system);
+}
+.spinner{
+  width:30px; height:30px; border-radius:50%; border:3px solid var(--paper-dark);
+  border-top-color:var(--teal); margin:0 auto; animation:spin 0.9s linear infinite;
+}
+@keyframes spin{ to{ transform:rotate(360deg); } }
+.modal-actions{ display:flex; gap:10px; justify-content:center; }
+
+@media (prefers-reduced-motion: reduce){
+  .card-drawn{ animation:none !important; }
+  .card.flipped{ animation:none !important; transform:rotateY(180deg) !important; }
+  *{ transition:none !important; }
+}
+
+@media (max-width: 640px){
+  .app-title{ font-size:21px; }
+  .card{ min-height:290px; }
+  .card-word{ font-size:26px; }
+  .score-card{ padding:18px 26px; }
+  .score-number{ font-size:36px; }
+}
+</style>
+</head>
+<body>
+<div class="app-shell"><div id="app"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script>
+/* ============ Config ============ */
+var PRAISES = [
+  'Correct.',
+  'That is right.',
+  'Well done.',
+  'Exactly right.',
+  'Nicely done.',
+  'Correct, good work.',
+  'That is the right answer.'
+];
+
+var GOOGLE_DRIVE_MCP_URL = 'https://drivemcp.googleapis.com/mcp/v1';
+
+var ICON_EDIT = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>';
+var ICON_DELETE = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+
+/* ============ State ============ */
+var state = {
+  view: 'home',
+  students: [],
+  currentStudentId: null,
+  sessions: [],
+  expandedSessionId: null,
+  lessonName: '',
+  contentSource: 'paste',
+  contentText: '',
+  driveLink: '',
+  deck: [],
+  currentCardIndex: -1,
+  currentAttempt: 0,
+  stage: 'deckWaiting',
+  justDrawn: false,
+  score: 0,
+  showAddForm: false,
+  newStudentName: '',
+  editingStudentId: null,
+  editStudentName: '',
+  deletingStudentId: null,
+  loading: false,
+  error: null,
+  showExitConfirm: false
+};
+
+/* ============ Storage helpers ============ */
+async function loadStudents(){
+  try{
+    var r = await window.storage.get('students');
+    return r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ return []; }
+}
+async function saveStudents(list){
+  try{ await window.storage.set('students', JSON.stringify(list)); }
+  catch(e){ console.error('saveStudents failed', e); }
+}
+async function loadSessions(studentId){
+  try{
+    var r = await window.storage.get('sessions:' + studentId);
+    return r && r.value ? JSON.parse(r.value) : [];
+  }catch(e){ return []; }
+}
+async function saveSessions(studentId, list){
+  try{ await window.storage.set('sessions:' + studentId, JSON.stringify(list)); }
+  catch(e){ console.error('saveSessions failed', e); }
+}
+
+/* ============ Utilities ============ */
+function esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function shuffle(arr){
+  var a = arr.slice();
+  for(var i = a.length - 1; i > 0; i--){
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return a;
+}
+function formatDate(ts){
+  var d = new Date(ts);
+  return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
+}
+function pickPraise(){ return PRAISES[Math.floor(Math.random() * PRAISES.length)]; }
+function gradeLabel(score){
+  if(score >= 90) return {tier:'outstanding', text:'Outstanding'};
+  if(score >= 75) return {tier:'great', text:'Great work'};
+  if(score >= 50) return {tier:'keep-practicing', text:'Keep practicing'};
+  return {tier:'needs-review', text:'Needs more review'};
+}
+function chipClass(outcome){
+  if(outcome === 'correct1' || outcome === 'correct2') return 'chip-correct';
+  if(outcome === 'wrong') return 'chip-wrong';
+  return 'chip-neutral';
+}
+function outcomeIcon(outcome){
+  if(outcome === 'correct1' || outcome === 'correct2') return '✓';
+  if(outcome === 'wrong') return '✗';
+  return '';
+}
+function currentStudentName(){
+  var s = state.students.find(function(x){ return x.id === state.currentStudentId; });
+  return s ? s.name : '';
+}
+function getGreeting(){
+  var h = new Date().getHours();
+  if(h < 12) return 'Good morning';
+  if(h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+/* ============ Render dispatch ============ */
+function render(){
+  var app = document.getElementById('app');
+  var html = '';
+  if(state.view === 'home') html = renderHome();
+  else if(state.view === 'studentDetail') html = renderStudentDetail();
+  else if(state.view === 'newLesson') html = renderNewLesson();
+  else if(state.view === 'deck') html = renderDeckView();
+  else if(state.view === 'results') html = renderResults();
+
+  var overlays = '';
+  if(state.loading) overlays += renderLoadingOverlay();
+  if(state.showExitConfirm) overlays += renderExitModal();
+  if(state.deletingStudentId) overlays += renderDeleteStudentModal();
+
+  app.innerHTML = html + overlays;
+}
+
+/* ============ Home / roster ============ */
+function renderHome(){
+  var tiles = state.students.map(function(s){
+    if(state.editingStudentId === s.id){
+      return '<div class="student-tab edit-form">' +
+        '<input type="text" id="editStudentInput" class="text-input" value="' + esc(state.editStudentName) + '" oninput="state.editStudentName=this.value" onkeydown="if(event.key===\'Enter\')confirmEditStudent()" />' +
+        '<div class="form-actions">' +
+          '<button class="btn btn-small btn-teal" onclick="confirmEditStudent()">Save</button>' +
+          '<button class="btn btn-small btn-ghost" onclick="cancelEditStudent()">Cancel</button>' +
+        '</div>' +
+      '</div>';
+    }
+    return '<div class="student-tab">' +
+      '<button class="student-tab-main" onclick="openStudent(\'' + s.id + '\')">' +
+        '<span class="tab-name">' + esc(s.name) + '</span>' +
+        '<span class="tab-meta">Added ' + formatDate(s.createdAt) + '</span>' +
+      '</button>' +
+      '<div class="student-tab-actions">' +
+        '<button class="icon-btn" onclick="startEditStudent(\'' + s.id + '\')" title="Edit" aria-label="Edit ' + esc(s.name) + '">' + ICON_EDIT + '</button>' +
+        '<button class="icon-btn icon-btn-danger" onclick="confirmDeleteStudent(\'' + s.id + '\')" title="Delete" aria-label="Delete ' + esc(s.name) + '">' + ICON_DELETE + '</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  var addFormHtml = state.showAddForm ?
+    '<div class="student-tab add-form">' +
+      '<input type="text" id="newStudentInput" class="text-input" placeholder="Student name" value="' + esc(state.newStudentName) + '" oninput="state.newStudentName=this.value" onkeydown="if(event.key===\'Enter\')confirmAddStudent()" />' +
+      '<div class="form-actions">' +
+        '<button class="btn btn-small btn-teal" onclick="confirmAddStudent()">Add</button>' +
+        '<button class="btn btn-small btn-ghost" onclick="cancelAddStudent()">Cancel</button>' +
+      '</div>' +
+    '</div>' : '';
+
+  var welcomeHtml = '<div class="welcome-row">' +
+    '<span class="welcome-text">' + getGreeting() + ', <span class="teacher-name">Teacher Amy</span></span>' +
+  '</div>';
+
+  return '<div class="screen home-screen">' +
+    '<div class="app-header">' +
+      '<div class="eyebrow">Teacher Dashboard</div>' +
+      welcomeHtml +
+      '<div class="app-title">Vocab Card Classroom</div>' +
+      '<div class="app-subtitle">Keep a personal vocabulary record for every student</div>' +
+    '</div>' +
+    '<div class="section-toolbar">' +
+      '<div class="section-title">Students <span class="count-badge">' + state.students.length + '</span></div>' +
+      '<button class="btn btn-teal btn-small" onclick="openAddForm()">+ Add Student</button>' +
+    '</div>' +
+    '<div class="tab-grid">' + addFormHtml + tiles + '</div>' +
+    (state.students.length === 0 && !state.showAddForm ? '<p class="empty-note">No students yet. Click "+ Add Student" to get started.</p>' : '') +
+  '</div>';
+}
+
+function openAddForm(){
+  state.showAddForm = true;
+  state.newStudentName = '';
+  render();
+  setTimeout(function(){
+    var el = document.getElementById('newStudentInput');
+    if(el) el.focus();
+  }, 0);
+}
+function cancelAddStudent(){ state.showAddForm = false; state.newStudentName = ''; render(); }
+async function confirmAddStudent(){
+  var name = (state.newStudentName || '').trim();
+  if(!name) return;
+  var student = { id: uid(), name: name, createdAt: Date.now() };
+  state.students.push(student);
+  await saveStudents(state.students);
+  state.showAddForm = false;
+  state.newStudentName = '';
+  render();
+}
+
+function startEditStudent(id){
+  var s = state.students.find(function(x){ return x.id === id; });
+  if(!s) return;
+  state.editingStudentId = id;
+  state.editStudentName = s.name;
+  render();
+  setTimeout(function(){
+    var el = document.getElementById('editStudentInput');
+    if(el) el.focus();
+  }, 0);
+}
+function cancelEditStudent(){ state.editingStudentId = null; state.editStudentName = ''; render(); }
+async function confirmEditStudent(){
+  var name = (state.editStudentName || '').trim();
+  if(!name) return;
+  var s = state.students.find(function(x){ return x.id === state.editingStudentId; });
+  if(s) s.name = name;
+  await saveStudents(state.students);
+  state.editingStudentId = null;
+  state.editStudentName = '';
+  render();
+}
+
+function confirmDeleteStudent(id){ state.deletingStudentId = id; render(); }
+function cancelDeleteStudent(){ state.deletingStudentId = null; render(); }
+async function deleteStudentConfirmed(){
+  var id = state.deletingStudentId;
+  state.students = state.students.filter(function(s){ return s.id !== id; });
+  await saveStudents(state.students);
+  try{ await window.storage.delete('sessions:' + id); } catch(e){ /* no sessions to remove */ }
+  state.deletingStudentId = null;
+  state.view = 'home';
+  state.currentStudentId = null;
+  render();
+}
+function renderDeleteStudentModal(){
+  var s = state.students.find(function(x){ return x.id === state.deletingStudentId; });
+  var name = s ? s.name : 'this student';
+  return '<div class="overlay"><div class="modal-card">' +
+    '<p>Delete ' + esc(name) + ' and all of their lesson records? This cannot be undone.</p>' +
+    '<div class="modal-actions">' +
+      '<button class="btn btn-ghost" onclick="cancelDeleteStudent()">Cancel</button>' +
+      '<button class="btn btn-wrong" onclick="deleteStudentConfirmed()">Delete</button>' +
+    '</div>' +
+  '</div></div>';
+}
+
+async function openStudent(id){
+  state.currentStudentId = id;
+  state.expandedSessionId = null;
+  state.sessions = await loadSessions(id);
+  state.view = 'studentDetail';
+  render();
+}
+function goHome(){
+  state.view = 'home';
+  state.currentStudentId = null;
+  render();
+}
+
+/* ============ Student detail ============ */
+function renderStudentDetail(){
+  var student = state.students.find(function(s){ return s.id === state.currentStudentId; });
+  if(!student){
+    return '<div class="screen"><p>Student not found.</p><button class="link-btn" onclick="goHome()">← Back</button></div>';
+  }
+  var sessions = state.sessions.slice().sort(function(a,b){ return b.date - a.date; });
+  var avg = sessions.length ? Math.round(sessions.reduce(function(sum,s){ return sum + s.score; }, 0) / sessions.length) : null;
+
+  var rows = sessions.map(function(s){
+    var expanded = state.expandedSessionId === s.id;
+    var detailHtml = '';
+    if(expanded){
+      detailHtml = '<div class="session-detail">' +
+        s.details.map(function(d){
+          return '<span class="word-chip ' + chipClass(d.outcome) + '">' + esc(d.word) + ' ' + outcomeIcon(d.outcome) + '</span>';
+        }).join('') +
+      '</div>';
+    }
+    return '<div class="session-row">' +
+      '<button class="session-summary" onclick="toggleSession(\'' + s.id + '\')">' +
+        '<span class="session-date">' + formatDate(s.date) + '</span>' +
+        '<span class="session-name">' + esc(s.lessonName) + '</span>' +
+        '<span class="session-score">' + s.score + ' pts</span>' +
+      '</button>' +
+      detailHtml +
+    '</div>';
+  }).join('');
+
+  var headerHtml;
+  if(state.editingStudentId === student.id){
+    headerHtml = '<div class="student-header-left">' +
+      '<input type="text" id="editStudentInput" class="text-input student-edit-input" value="' + esc(state.editStudentName) + '" oninput="state.editStudentName=this.value" onkeydown="if(event.key===\'Enter\')confirmEditStudent()" />' +
+      '<button class="btn btn-small btn-teal" onclick="confirmEditStudent()">Save</button>' +
+      '<button class="btn btn-small btn-ghost" onclick="cancelEditStudent()">Cancel</button>' +
+    '</div>';
+  } else {
+    headerHtml = '<div class="student-header-left">' +
+      '<div class="student-name-tag">' + esc(student.name) + '</div>' +
+      (avg !== null ? '<div class="student-avg">Average score: ' + avg + '</div>' : '') +
+    '</div>' +
+    '<div class="student-header-actions">' +
+      '<button class="icon-btn" onclick="startEditStudent(\'' + student.id + '\')" title="Edit" aria-label="Edit ' + esc(student.name) + '">' + ICON_EDIT + '</button>' +
+      '<button class="icon-btn icon-btn-danger" onclick="confirmDeleteStudent(\'' + student.id + '\')" title="Delete" aria-label="Delete ' + esc(student.name) + '">' + ICON_DELETE + '</button>' +
+    '</div>';
+  }
+
+  return '<div class="screen student-screen">' +
+    '<button class="link-btn" onclick="goHome()">← Back to student list</button>' +
+    '<div class="student-header">' + headerHtml + '</div>' +
+    '<button class="btn btn-stamp" onclick="startNewLesson()">Start New Lesson</button>' +
+    '<div class="session-list">' +
+      (sessions.length ? rows : '<p class="empty-note">No lesson records yet.</p>') +
+    '</div>' +
+  '</div>';
+}
+function toggleSession(id){
+  state.expandedSessionId = state.expandedSessionId === id ? null : id;
+  render();
+}
+
+/* ============ New lesson setup ============ */
+function startNewLesson(){
+  state.lessonName = 'New Lesson ' + formatDate(Date.now());
+  state.contentSource = 'paste';
+  state.contentText = '';
+  state.driveLink = '';
+  state.error = null;
+  state.view = 'newLesson';
+  render();
+}
+function backFromNewLesson(){ state.view = 'studentDetail'; render(); }
+function setContentSource(t){ state.contentSource = t; state.error = null; render(); }
+
+function renderNewLesson(){
+  var student = state.students.find(function(s){ return s.id === state.currentStudentId; });
+  var tabs = ['paste','upload','drive'];
+  var labels = { paste:'Paste Text', upload:'Upload File', drive:'Google Drive' };
+  var tabsHtml = tabs.map(function(t){
+    return '<button class="src-tab ' + (state.contentSource === t ? 'active' : '') + '" onclick="setContentSource(\'' + t + '\')">' + labels[t] + '</button>';
+  }).join('');
+
+  var inputArea = '';
+  if(state.contentSource === 'paste'){
+    inputArea = '<textarea class="text-area" placeholder="Paste the lesson passage here..." oninput="state.contentText=this.value">' + esc(state.contentText) + '</textarea>';
+  } else if(state.contentSource === 'upload'){
+    inputArea = '<input type="file" id="fileInput" accept=".txt,.md,.docx" onchange="handleFileUpload(this)" class="file-input" />' +
+      '<p class="hint-text">Supports .txt, .md, .docx files. For other formats, use "Paste Text" instead.</p>' +
+      (state.contentText ? '<div class="file-preview">Loaded ' + state.contentText.length + ' characters</div>' : '');
+  } else {
+    inputArea = '<input type="text" class="text-input" placeholder="Paste a Google Drive file link" value="' + esc(state.driveLink) + '" oninput="state.driveLink=this.value" />' +
+      '<p class="hint-text">Make sure this file is accessible through your Google Drive.</p>';
+  }
+
+  return '<div class="screen lesson-setup-screen">' +
+    '<button class="link-btn" onclick="backFromNewLesson()">← Back</button>' +
+    '<div class="setup-title">New lesson for ' + esc(student ? student.name : '') + '</div>' +
+    '<input type="text" class="text-input lesson-name-input" value="' + esc(state.lessonName) + '" oninput="state.lessonName=this.value" placeholder="Lesson name" />' +
+    '<div class="source-tabs">' + tabsHtml + '</div>' +
+    '<div class="source-input-area">' + inputArea + '</div>' +
+    (state.error ? '<div class="error-banner">' + esc(state.error) + '</div>' : '') +
+    '<button class="btn btn-teal btn-generate" onclick="generateVocabCards()">Generate Vocab Cards</button>' +
+  '</div>';
+}
+
+async function handleFileUpload(fileInput){
+  var file = fileInput.files[0];
+  if(!file) return;
+  var name = file.name.toLowerCase();
+  try{
+    if(name.endsWith('.txt') || name.endsWith('.md')){
+      state.contentText = await file.text();
+      state.error = null;
+    } else if(name.endsWith('.docx')){
+      if(typeof mammoth === 'undefined'){
+        state.error = 'The document parser failed to load. Please use "Paste Text" instead.';
+      } else {
+        var buf = await file.arrayBuffer();
+        var result = await mammoth.extractRawText({ arrayBuffer: buf });
+        state.contentText = result.value;
+        state.error = null;
+      }
+    } else {
+      state.error = 'Only .txt, .md, and .docx files are supported. For other formats, use "Paste Text" or "Google Drive" instead.';
+    }
+  } catch(e){
+    state.error = 'File read failed: ' + (e && e.message ? e.message : 'Please check the file format.');
+  }
+  render();
+}
+
+/* ============ AI vocab generation ============ */
+function buildSchemaInstruction(){
+  return 'Carefully read the passage and select the 10 vocabulary words best suited for this student to review and learn ' +
+    '(avoid overly simple words like "the", "a", "is"; prioritize words that are representative of this passage and that the student needs to master).\n\n' +
+    'For each word, provide the following fields in English. Keep every field short - this is important:\n' +
+    '- word: the vocabulary word itself\n' +
+    '- partOfSpeech: an abbreviation such as n. / v. / adj. / adv.\n' +
+    '- contextSentence: a short quote from the passage where this word appears (at most 20 words; if the sentence is longer, quote only the part around the word)\n' +
+    '- prompt: a short question (under 12 words) the teacher can ask the student out loud to test understanding of the word\n' +
+    '- standardAnswer: a concise, accurate standard answer, a definition or example sentence (under 15 words)\n' +
+    '- hint: a clue the teacher can give if the student gets it wrong the first time, without giving away the answer (under 12 words)\n' +
+    '- explanation: a full explanation shown after two wrong attempts, including a clear definition and one short example sentence (under 30 words)\n\n' +
+    'Return only a single JSON object in this exact format, with no explanatory text, preamble, or markdown code fences:\n' +
+    '{"cards":[{"word":"...","partOfSpeech":"...","contextSentence":"...","prompt":"...","standardAnswer":"...","hint":"...","explanation":"..."}]} (the array must contain exactly 10 items, and the JSON must be complete and valid - do not run out of space before closing every bracket)';
+}
+
+function extractCardsFromText(text){
+  var firstBrace = text.indexOf('{');
+  var lastBrace = text.lastIndexOf('}');
+  var slice = (firstBrace !== -1 && lastBrace > firstBrace) ? text.slice(firstBrace, lastBrace + 1) : text;
+
+  try{
+    var obj = JSON.parse(slice);
+    if(obj && Array.isArray(obj.cards) && obj.cards.length) return obj.cards;
+  } catch(e1){
+    var repaired = slice.replace(/,\s*([}\]])/g, '$1');
+    try{
+      var obj2 = JSON.parse(repaired);
+      if(obj2 && Array.isArray(obj2.cards) && obj2.cards.length) return obj2.cards;
+    } catch(e2){ /* fall through to salvage below */ }
+  }
+
+  var matches = text.match(/\{[^{}]*"word"\s*:[^{}]*\}/g);
+  if(matches && matches.length){
+    var cards = [];
+    matches.forEach(function(m){
+      try{
+        var card = JSON.parse(m.replace(/,\s*\}/g, '}'));
+        cards.push(card);
+      } catch(e3){ /* skip this malformed fragment */ }
+    });
+    if(cards.length) return cards;
+  }
+  return null;
+}
+
+async function generateVocabCards(){
+  state.error = null;
+  if(state.contentSource === 'paste' && state.contentText.trim().length < 20){
+    state.error = 'The passage is too short. Please paste at least one full paragraph.';
+    render();
+    return;
+  }
+  if(state.contentSource === 'upload' && state.contentText.trim().length < 20){
+    state.error = 'The file content could not be read yet. Please re-upload, or use "Paste Text" instead.';
+    render();
+    return;
+  }
+  if(state.contentSource === 'drive' && !state.driveLink.trim()){
+    state.error = 'Please paste a Google Drive file link.';
+    render();
+    return;
+  }
+
+  state.loading = true;
+  render();
+
+  try{
+    var schema = buildSchemaInstruction();
+    var userMessage, body;
+
+    if(state.contentSource === 'drive'){
+      userMessage = 'Please first use the available Google Drive tools to find and read the full text content of the following file (this is lesson material provided by the teacher):\n' +
+        state.driveLink.trim() + '\n\nOnce you have the content, ' + schema;
+    } else {
+      var content = state.contentText.trim().slice(0, 20000);
+      userMessage = schema + '\n\nPassage:\n"""\n' + content + '\n"""';
+    }
+
+    body = {
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4000,
+      system: 'You are a professional English teaching assistant. You only ever return valid JSON, with no explanatory text, preamble, or markdown formatting.',
+      messages: [{ role: 'user', content: userMessage }]
+    };
+    if(state.contentSource === 'drive'){
+      body.mcp_servers = [{ type: 'url', url: GOOGLE_DRIVE_MCP_URL, name: 'google-drive' }];
+    }
+
+    var res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if(!res.ok){
+      throw new Error('The AI service is currently unavailable (status code ' + res.status + '). Please try again later.');
+    }
+    var data = await res.json();
+    var textBlocks = (data.content || []).filter(function(b){ return b.type === 'text'; }).map(function(b){ return b.text; }).join('\n');
+    if(!textBlocks.trim()){
+      throw new Error('No content was retrieved. Please check the Google Drive link, or use "Paste Text" instead.');
+    }
+    var cleaned = textBlocks.replace(/```json/gi, '').replace(/```/g, '').trim();
+    var cardsArr = extractCardsFromText(cleaned);
+
+    if(!cardsArr || cardsArr.length === 0){
+      console.error('Could not parse vocabulary cards from AI response:', textBlocks);
+      throw new Error('The AI response was not in the expected format. Please try again.');
+    }
+
+    state.deck = shuffle(cardsArr.slice(0, 10)).map(function(c){
+      return {
+        word: c.word || '',
+        partOfSpeech: c.partOfSpeech || '',
+        contextSentence: c.contextSentence || '',
+        prompt: c.prompt || '',
+        standardAnswer: c.standardAnswer || '',
+        hint: c.hint || '',
+        explanation: c.explanation || '',
+        revealed: false,
+        outcome: null,
+        showHint: false,
+        flipped: false,
+        praise: null
+      };
+    });
+    state.currentCardIndex = -1;
+    state.currentAttempt = 0;
+    state.score = 0;
+    state.stage = 'deckWaiting';
+    state.view = 'deck';
+  } catch(err){
+    state.error = (err && err.message) ? err.message : 'An unknown error occurred. Please try again.';
+  } finally {
+    state.loading = false;
+    render();
+  }
+}
+
+/* ============ Deck / gameplay ============ */
+function renderDeckView(){
+  var doneCount = state.deck.filter(function(c){ return !!c.outcome; }).length;
+
+  var gridHtml = '<div class="card-grid">' + state.deck.map(function(c, i){
+    var cls = 'grid-slot';
+    var label = String(i + 1);
+    var isDisabled = false;
+    if(c.outcome === 'correct1' || c.outcome === 'correct2'){
+      cls += ' grid-slot-correct'; label = '✓'; isDisabled = true;
+    } else if(c.outcome === 'wrong'){
+      cls += ' grid-slot-wrong'; label = '✗'; isDisabled = true;
+    } else if(i === state.currentCardIndex && state.stage !== 'deckWaiting'){
+      cls += ' grid-slot-active'; isDisabled = true;
+    }
+    return '<button class="' + cls + '"' + (isDisabled ? ' disabled' : '') + ' onclick="selectCard(' + i + ')" aria-label="Card ' + (i + 1) + '">' + label + '</button>';
+  }).join('') + '</div>';
+
+  var focusHtml;
+  if(state.stage === 'cardActive' || state.stage === 'cardResolved'){
+    focusHtml = renderCardScene(state.deck[state.currentCardIndex]);
+  } else if(doneCount === 0){
+    focusHtml = '<p class="deck-hint">Click a card above to begin</p>';
+  } else {
+    focusHtml = '<p class="deck-hint">' + doneCount + ' of ' + state.deck.length + ' complete — click a card above to continue</p>';
+  }
+
+  return '<div class="screen deck-screen">' +
+    '<div class="deck-header">' +
+      '<button class="link-btn" onclick="confirmExitDeck()">← Back</button>' +
+      '<div class="deck-title">' +
+        '<span class="lesson-name">' + esc(state.lessonName) + '</span>' +
+        '<span class="student-tag">' + esc(currentStudentName()) + '</span>' +
+      '</div>' +
+      '<div class="score-tag">Score ' + state.score + '</div>' +
+    '</div>' +
+    gridHtml +
+    focusHtml +
+  '</div>';
+}
+
+function renderCardScene(card){
+  var posTag = card.partOfSpeech ? '<span class="pos-tag">' + esc(card.partOfSpeech) + '</span>' : '';
+  var allDone = state.deck.every(function(c){ return !!c.outcome; });
+  var nextLabel = allDone ? 'View results →' : 'Back to cards';
+
+  var frontBody = '<div class="card-word">' + esc(card.word) + '</div>' + posTag +
+    '<div class="card-prompt">' + esc(card.prompt) + '</div>' +
+    (card.showHint ? '<div class="hint-note"><span class="hint-label">Hint</span>' + esc(card.hint) + '</div>' : '') +
+    (!card.outcome ?
+      '<div class="answer-buttons">' +
+        '<button class="mark-btn mark-btn-correct" onclick="markAnswer(true)" aria-label="Correct">✓</button>' +
+        '<button class="mark-btn mark-btn-wrong" onclick="markAnswer(false)" aria-label="Incorrect">✗</button>' +
+      '</div>'
+      : '');
+
+  var isWrong = card.outcome === 'wrong';
+  var backBody = '';
+  if(card.outcome){
+    backBody = '<div class="card-word">' + esc(card.word) + '</div>' +
+      '<div class="result-banner ' + (isWrong ? 'result-wrong' : 'result-correct') + '">' +
+        (isWrong ? 'Explanation' : esc(card.praise || pickPraise())) +
+      '</div>' +
+      (!isWrong ?
+        '<div class="standard-answer"><strong>Standard answer: </strong>' + esc(card.standardAnswer) + '</div>'
+        : '<div class="explanation-text">' + esc(card.explanation) + '</div>'
+      ) +
+      (card.contextSentence ? '<div class="context-line">From the passage: "' + esc(card.contextSentence) + '"</div>' : '') +
+      '<button class="btn btn-next" onclick="proceedNext()">' + nextLabel + '</button>';
+  }
+
+  var drawAnimClass = state.justDrawn ? ' card-drawn' : '';
+  state.justDrawn = false;
+
+  return '<div class="card-scene"><div class="card' + (card.flipped ? ' flipped' : '') + drawAnimClass + '">' +
+    '<div class="card-face card-front">' + frontBody + '</div>' +
+    '<div class="card-face card-back">' + backBody + '</div>' +
+  '</div></div>';
+}
+
+function selectCard(i){
+  var card = state.deck[i];
+  if(!card || card.outcome) return;
+  state.currentCardIndex = i;
+  card.revealed = true;
+  state.currentAttempt = 1;
+  state.stage = 'cardActive';
+  state.justDrawn = true;
+  render();
+}
+
+function markAnswer(correct){
+  var card = state.deck[state.currentCardIndex];
+  if(correct){
+    card.outcome = state.currentAttempt === 1 ? 'correct1' : 'correct2';
+    card.praise = pickPraise();
+    state.score += state.currentAttempt === 1 ? 10 : 5;
+    card.flipped = true;
+    state.stage = 'cardResolved';
+  } else {
+    if(state.currentAttempt === 1){
+      card.showHint = true;
+      state.currentAttempt = 2;
+    } else {
+      card.outcome = 'wrong';
+      card.flipped = true;
+      state.stage = 'cardResolved';
+    }
+  }
+  render();
+}
+
+function proceedNext(){
+  var allDone = state.deck.every(function(c){ return !!c.outcome; });
+  if(allDone){
+    finishSession();
+  } else {
+    state.stage = 'deckWaiting';
+    state.currentCardIndex = -1;
+    render();
+  }
+}
+
+async function finishSession(){
+  var details = state.deck.map(function(c){
+    return { word: c.word, outcome: c.outcome, partOfSpeech: c.partOfSpeech };
+  });
+  var record = { id: uid(), date: Date.now(), lessonName: state.lessonName, score: state.score, details: details };
+  state.sessions = state.sessions.concat([record]);
+  await saveSessions(state.currentStudentId, state.sessions);
+  state.view = 'results';
+  render();
+}
+
+function confirmExitDeck(){ state.showExitConfirm = true; render(); }
+function exitDeckConfirmed(){ state.showExitConfirm = false; state.view = 'studentDetail'; render(); }
+function renderExitModal(){
+  return '<div class="overlay"><div class="modal-card">' +
+    '<p>This lesson is not finished yet. If you leave now, this session will not be saved. Are you sure you want to leave?</p>' +
+    '<div class="modal-actions">' +
+      '<button class="btn btn-ghost" onclick="state.showExitConfirm=false; render();">Continue lesson</button>' +
+      '<button class="btn btn-wrong" onclick="exitDeckConfirmed()">Yes, leave</button>' +
+    '</div>' +
+  '</div></div>';
+}
+function renderLoadingOverlay(){
+  return '<div class="overlay"><div class="loading-card"><div class="spinner"></div><p>AI is reading the passage and picking vocabulary...</p></div></div>';
+}
+
+/* ============ Results ============ */
+function renderResults(){
+  var student = state.students.find(function(s){ return s.id === state.currentStudentId; });
+  var grade = gradeLabel(state.score);
+  var chips = state.deck.map(function(c){
+    return '<span class="word-chip ' + chipClass(c.outcome) + '">' + esc(c.word) + ' ' + outcomeIcon(c.outcome) + '</span>';
+  }).join('');
+
+  return '<div class="screen results-screen">' +
+    '<div class="score-card grade-' + grade.tier + '">' +
+      '<div class="score-number">' + state.score + '</div>' +
+      '<div class="score-label">' + grade.text + '</div>' +
+    '</div>' +
+    '<div class="results-lesson">' + esc(state.lessonName) + ' · ' + esc(student ? student.name : '') + '</div>' +
+    '<div class="results-chips">' + chips + '</div>' +
+    '<div class="results-actions">' +
+      '<button class="btn btn-teal" onclick="backToStudentFromResults()">Back to ' + esc(student ? student.name : '') + ' records</button>' +
+    '</div>' +
+  '</div>';
+}
+function backToStudentFromResults(){ state.view = 'studentDetail'; render(); }
+
+/* ============ Init ============ */
+async function init(){
+  state.students = await loadStudents();
+  render();
+}
+init();
+</script>
+</body>
+</html>
