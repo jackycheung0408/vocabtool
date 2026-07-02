@@ -361,25 +361,45 @@ var state = {
 };
 
 /* ============ Storage helpers ============ */
+/* Uses window.storage when available (running as a Claude.ai artifact),
+   otherwise falls back to localStorage (running as a normal website). */
+async function storageGet(key){
+  if(window.storage && typeof window.storage.get === 'function'){
+    try{ var r = await window.storage.get(key); return r ? r.value : null; }
+    catch(e){ return null; }
+  }
+  try{ return localStorage.getItem(key); } catch(e){ return null; }
+}
+async function storageSet(key, value){
+  if(window.storage && typeof window.storage.set === 'function'){
+    try{ await window.storage.set(key, value); return; } catch(e){ /* fall through */ }
+  }
+  try{ localStorage.setItem(key, value); } catch(e){ console.error('storageSet failed', e); }
+}
+async function storageDelete(key){
+  if(window.storage && typeof window.storage.delete === 'function'){
+    try{ await window.storage.delete(key); return; } catch(e){ /* fall through */ }
+  }
+  try{ localStorage.removeItem(key); } catch(e){ console.error('storageDelete failed', e); }
+}
+
 async function loadStudents(){
   try{
-    var r = await window.storage.get('students');
-    return r && r.value ? JSON.parse(r.value) : [];
+    var raw = await storageGet('students');
+    return raw ? JSON.parse(raw) : [];
   }catch(e){ return []; }
 }
 async function saveStudents(list){
-  try{ await window.storage.set('students', JSON.stringify(list)); }
-  catch(e){ console.error('saveStudents failed', e); }
+  await storageSet('students', JSON.stringify(list));
 }
 async function loadSessions(studentId){
   try{
-    var r = await window.storage.get('sessions:' + studentId);
-    return r && r.value ? JSON.parse(r.value) : [];
+    var raw = await storageGet('sessions:' + studentId);
+    return raw ? JSON.parse(raw) : [];
   }catch(e){ return []; }
 }
 async function saveSessions(studentId, list){
-  try{ await window.storage.set('sessions:' + studentId, JSON.stringify(list)); }
-  catch(e){ console.error('saveSessions failed', e); }
+  await storageSet('sessions:' + studentId, JSON.stringify(list));
 }
 
 /* ============ Utilities ============ */
@@ -610,7 +630,7 @@ async function deleteStudentConfirmed(){
   var id = state.deletingStudentId;
   state.students = state.students.filter(function(s){ return s.id !== id; });
   await saveStudents(state.students);
-  try{ await window.storage.delete('sessions:' + id); } catch(e){ /* no sessions to remove */ }
+  try{ await storageDelete('sessions:' + id); } catch(e){ /* no sessions to remove */ }
   state.deletingStudentId = null;
   state.view = 'home';
   state.currentStudentId = null;
@@ -775,11 +795,12 @@ function renderNewLesson(){
 
   var inputArea = '';
   if(state.contentSource === 'paste'){
-    inputArea = '<textarea class="text-area" placeholder="Paste the lesson passage here..." oninput="state.contentText=this.value">' + esc(state.contentText) + '</textarea>';
+    inputArea = '<textarea class="text-area" placeholder="Paste the lesson passage here..." oninput="state.contentText=this.value">' + esc(state.contentText) + '</textarea>' +
+      '<p class="hint-text">Keep passages under about 4000 characters (roughly 700-800 words) for reliable results.</p>';
   } else if(state.contentSource === 'upload'){
     inputArea = '<input type="file" id="fileInput" accept=".txt,.md,.docx" onchange="handleFileUpload(this)" class="file-input" />' +
-      '<p class="hint-text">Supports .txt, .md, .docx files. For other formats, use "Paste Text" instead.</p>' +
-      (state.contentText ? '<div class="file-preview">Loaded ' + state.contentText.length + ' characters</div>' : '');
+      '<p class="hint-text">Supports .txt, .md, .docx files (best kept under about 4000 characters). For other formats, use "Paste Text" instead.</p>' +
+      (state.contentText ? '<div class="file-preview">Loaded ' + state.contentText.length + ' characters' + (state.contentText.length > 4000 ? ' (only the first 4000 will be used)' : '') + '</div>' : '');
   } else {
     inputArea = '<input type="text" class="text-input" placeholder="Paste a Google Drive file link" value="' + esc(state.driveLink) + '" oninput="state.driveLink=this.value" />' +
       '<p class="hint-text">Make sure this file is in the Google Drive account connected to your backend (Google Doc or plain text file).</p>';
@@ -850,16 +871,16 @@ async function generateVocabCards(){
   render();
 
   try{
-    var payload = {
-      mode: state.contentSource,
-      content: state.contentSource === 'drive' ? '' : state.contentText.trim().slice(0, 20000),
-      driveLink: state.contentSource === 'drive' ? state.driveLink.trim() : ''
-    };
+    var params = new URLSearchParams();
+    params.set('mode', state.contentSource);
+    if(state.contentSource === 'drive'){
+      params.set('driveLink', state.driveLink.trim());
+    } else {
+      params.set('content', state.contentText.trim().slice(0, 4000));
+    }
 
-    var res = await fetch(BACKEND_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
+    var res = await fetch(BACKEND_ENDPOINT + '?' + params.toString(), {
+      method: 'GET'
     });
     if(!res.ok){
       throw new Error('The backend is currently unavailable (status code ' + res.status + '). Please try again later.');
