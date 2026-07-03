@@ -134,6 +134,7 @@ input, textarea{ font-family:inherit; }
 .file-input{ font-size:13px; }
 .hint-text{ font-size:12px; color:var(--ink-soft); margin:4px 0 0; }
 .file-preview{ font-family:var(--font-system); font-size:12px; font-weight:600; color:var(--correct); margin-top:6px; }
+.drive-load-btn{ margin-top:10px; }
 
 /* ---------- Student detail ---------- */
 .student-header{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding-bottom:16px; border-bottom:1px solid var(--line); }
@@ -310,11 +311,31 @@ input, textarea{ font-family:inherit; }
 }
 
 @media (max-width: 640px){
+  .app-shell{ padding:20px 16px 40px; }
   .app-title{ font-size:21px; }
+  .app-header{ margin-bottom:20px; padding-bottom:14px; }
+  .student-name-tag{ font-size:26px; }
   .card{ min-height:290px; }
   .card-word{ font-size:26px; }
+  .card-face{ padding:20px 18px; }
   .score-card{ padding:18px 26px; }
   .score-number{ font-size:36px; }
+  .source-tabs{ flex-wrap:wrap; }
+  .src-tab{ flex:1 1 auto; text-align:center; padding:8px 10px; }
+  .draft-word-row{ flex-wrap:wrap; }
+  .draft-pos-input{ max-width:100%; }
+  .icon-btn{ width:34px; height:34px; }
+  .student-tab-actions{ gap:10px; }
+  .modal-card, .loading-card{ max-width:90vw; }
+  .tab-grid{ grid-template-columns:1fr; }
+  .deck-title{ order:-1; flex-basis:100%; }
+}
+
+@media (max-width: 380px){
+  .card-word{ font-size:22px; }
+  .mark-btn{ width:46px; height:46px; font-size:19px; }
+  .score-number{ font-size:32px; }
+  .btn-generate{ width:100%; }
 }
 </style>
 </head>
@@ -322,6 +343,13 @@ input, textarea{ font-family:inherit; }
 <div class="app-shell"><div id="app"></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+if(typeof pdfjsLib !== 'undefined'){
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+</script>
 <script>
 /* ============ Config ============ */
 var PRAISES = [
@@ -351,6 +379,7 @@ var state = {
   lessonName: '',
   contentSource: 'paste',
   contentText: '',
+  driveLink: '',
   draftCards: [],
   deck: [],
   currentCardIndex: -1,
@@ -795,8 +824,8 @@ function setContentSource(t){ state.contentSource = t; state.error = null; rende
 
 function renderNewLesson(){
   var student = state.students.find(function(s){ return s.id === state.currentStudentId; });
-  var tabs = ['paste','upload'];
-  var labels = { paste:'Paste Text', upload:'Upload File' };
+  var tabs = ['paste','upload','drive'];
+  var labels = { paste:'Paste Text', upload:'Upload File', drive:'Google Drive' };
   var tabsHtml = tabs.map(function(t){
     return '<button class="src-tab ' + (state.contentSource === t ? 'active' : '') + '" onclick="setContentSource(\'' + t + '\')">' + labels[t] + '</button>';
   }).join('');
@@ -804,9 +833,14 @@ function renderNewLesson(){
   var inputArea = '';
   if(state.contentSource === 'paste'){
     inputArea = '<textarea class="text-area" placeholder="Paste the lesson passage here..." oninput="state.contentText=this.value">' + esc(state.contentText) + '</textarea>';
+  } else if(state.contentSource === 'upload'){
+    inputArea = '<input type="file" id="fileInput" accept=".txt,.md,.docx,.pdf,.pptx" onchange="handleFileUpload(this)" class="file-input" />' +
+      '<p class="hint-text">Supports .txt, .md, .docx, .pdf, and .pptx files. For other formats, use "Paste Text" instead.</p>' +
+      (state.contentText ? '<div class="file-preview">Loaded ' + state.contentText.length + ' characters</div>' : '');
   } else {
-    inputArea = '<input type="file" id="fileInput" accept=".txt,.md,.docx" onchange="handleFileUpload(this)" class="file-input" />' +
-      '<p class="hint-text">Supports .txt, .md, .docx files. For other formats, use "Paste Text" instead.</p>' +
+    inputArea = '<input type="text" class="text-input" placeholder="Paste a Google Drive share link" value="' + esc(state.driveLink) + '" oninput="state.driveLink=this.value" />' +
+      '<p class="hint-text">Best effort only: works for Google Docs/Slides shared as "Anyone with the link can view", but Google may block the request. If it fails, copy the text and use "Paste Text" instead.</p>' +
+      '<button class="btn btn-ghost btn-small drive-load-btn" onclick="loadFromDrive()">Load from Drive</button>' +
       (state.contentText ? '<div class="file-preview">Loaded ' + state.contentText.length + ' characters</div>' : '');
   }
 
@@ -819,6 +853,43 @@ function renderNewLesson(){
     (state.error ? '<div class="error-banner">' + esc(state.error) + '</div>' : '') +
     '<button class="btn btn-teal btn-generate" onclick="extractWordsForLesson()">Pick Words from Passage</button>' +
   '</div>';
+}
+
+function decodeXmlEntities(str){
+  return str.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&apos;/g,"'");
+}
+
+async function extractPdfText(arrayBuffer){
+  var pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  var textParts = [];
+  for(var i = 1; i <= pdf.numPages; i++){
+    var page = await pdf.getPage(i);
+    var content = await page.getTextContent();
+    var pageText = content.items.map(function(item){ return item.str; }).join(' ');
+    textParts.push(pageText);
+  }
+  return textParts.join('\n\n');
+}
+
+async function extractPptxText(arrayBuffer){
+  var zip = await JSZip.loadAsync(arrayBuffer);
+  var slideFiles = Object.keys(zip.files)
+    .filter(function(name){ return /^ppt\/slides\/slide\d+\.xml$/.test(name); })
+    .sort(function(a, b){
+      var na = parseInt(a.match(/slide(\d+)\.xml/)[1], 10);
+      var nb = parseInt(b.match(/slide(\d+)\.xml/)[1], 10);
+      return na - nb;
+    });
+  var texts = [];
+  for(var i = 0; i < slideFiles.length; i++){
+    var xml = await zip.files[slideFiles[i]].async('string');
+    var matches = xml.match(/<a:t>([^<]*)<\/a:t>/g) || [];
+    var slideText = matches.map(function(m){
+      return decodeXmlEntities(m.replace('<a:t>', '').replace('</a:t>', ''));
+    }).join(' ');
+    texts.push(slideText);
+  }
+  return texts.join('\n\n');
 }
 
 async function handleFileUpload(fileInput){
@@ -838,13 +909,105 @@ async function handleFileUpload(fileInput){
         state.contentText = result.value;
         state.error = null;
       }
+    } else if(name.endsWith('.pdf')){
+      if(typeof pdfjsLib === 'undefined'){
+        state.error = 'The PDF parser failed to load. Please use "Paste Text" instead.';
+      } else {
+        var pdfBuf = await file.arrayBuffer();
+        state.contentText = await extractPdfText(pdfBuf);
+        state.error = null;
+      }
+    } else if(name.endsWith('.pptx')){
+      if(typeof JSZip === 'undefined'){
+        state.error = 'The presentation parser failed to load. Please use "Paste Text" instead.';
+      } else {
+        var pptxBuf = await file.arrayBuffer();
+        state.contentText = await extractPptxText(pptxBuf);
+        state.error = null;
+      }
+    } else if(name.endsWith('.ppt')){
+      state.error = 'Old-format .ppt files are not supported. Please save as .pptx, or use "Paste Text" instead.';
     } else {
-      state.error = 'Only .txt, .md, and .docx files are supported. For other formats, use "Paste Text" instead.';
+      state.error = 'Only .txt, .md, .docx, .pdf, and .pptx files are supported. For other formats, use "Paste Text" instead.';
     }
   } catch(e){
     state.error = 'File read failed: ' + (e && e.message ? e.message : 'Please check the file format.');
   }
   render();
+}
+
+function extractDriveFileId(link){
+  var match = String(link || '').match(/[-\w]{25,}/);
+  return match ? match[0] : null;
+}
+
+async function fetchGoogleDriveContent(link){
+  var id = extractDriveFileId(link);
+  if(!id) throw new Error('Could not find a file ID in that Google Drive link.');
+
+  var isDoc = link.indexOf('/document/') !== -1;
+  var isSlides = link.indexOf('/presentation/') !== -1;
+
+  var url;
+  if(isDoc){
+    url = 'https://docs.google.com/document/d/' + id + '/export?format=txt';
+  } else if(isSlides){
+    url = 'https://docs.google.com/presentation/d/' + id + '/export/txt';
+  } else {
+    url = 'https://drive.google.com/uc?export=download&id=' + id;
+  }
+
+  var res = await fetch(url);
+  if(!res.ok){
+    throw new Error('Google Drive returned an error (status ' + res.status + '). Make sure the file is shared as "Anyone with the link can view".');
+  }
+
+  var contentType = (res.headers.get('content-type') || '').toLowerCase();
+  if(contentType.indexOf('pdf') !== -1){
+    if(typeof pdfjsLib === 'undefined') throw new Error('The PDF parser failed to load.');
+    var pdfBuf = await res.arrayBuffer();
+    return await extractPdfText(pdfBuf);
+  }
+  if(contentType.indexOf('wordprocessingml') !== -1){
+    if(typeof mammoth === 'undefined') throw new Error('The document parser failed to load.');
+    var docxBuf = await res.arrayBuffer();
+    var result = await mammoth.extractRawText({ arrayBuffer: docxBuf });
+    return result.value;
+  }
+  if(contentType.indexOf('presentationml') !== -1){
+    if(typeof JSZip === 'undefined') throw new Error('The presentation parser failed to load.');
+    var pptxBuf = await res.arrayBuffer();
+    return await extractPptxText(pptxBuf);
+  }
+  return await res.text();
+}
+
+async function loadFromDrive(){
+  state.error = null;
+  var link = state.driveLink.trim();
+  if(!link){
+    state.error = 'Please paste a Google Drive link.';
+    render();
+    return;
+  }
+
+  state.loading = true;
+  render();
+
+  try{
+    var text = await fetchGoogleDriveContent(link);
+    if(!text || text.trim().length < 20){
+      throw new Error('The file appears to be empty, too short, or not text-based.');
+    }
+    state.contentText = text;
+  } catch(e){
+    state.contentText = '';
+    state.error = (e && e.message ? e.message : 'Could not load that file.') +
+      ' Google often blocks this kind of request for security reasons - copying the text and using "Paste Text" is the reliable option.';
+  } finally {
+    state.loading = false;
+    render();
+  }
 }
 
 /* ============ Word picking + free dictionary lookup (no backend, no AI) ============ */
@@ -1585,7 +1748,45 @@ function extractCandidateWords(text, count){
   return candidates.slice(0, count);
 }
 
-function extractWordsForLesson(){
+var POS_ABBREV = {
+  noun:'n.', verb:'v.', adjective:'adj.', adverb:'adv.', pronoun:'pron.',
+  preposition:'prep.', conjunction:'conj.', interjection:'interj.',
+  exclamation:'interj.', article:'art.', determiner:'det.'
+};
+
+function buildContextHint(word, fullSentence, extraNudge){
+  var pattern = new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi');
+  var blanked = fullSentence.replace(pattern, '_____');
+  if(blanked.length > 150) blanked = blanked.slice(0, 150) + '...';
+  var hint = 'Look at how it is used: "' + blanked + '"';
+  if(extraNudge){
+    hint += ' (related to: ' + extraNudge.toLowerCase() + ')';
+  }
+  return hint;
+}
+
+async function tryLiveDictionaryLookup(word){
+  try{
+    var res = await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(word));
+    if(!res.ok) return null;
+    var data = await res.json();
+    if(!Array.isArray(data) || !data[0] || !data[0].meanings || !data[0].meanings[0]) return null;
+    var meaning = data[0].meanings[0];
+    var def = meaning.definitions && meaning.definitions[0];
+    if(!def || !def.definition) return null;
+    var synonym = (def.synonyms && def.synonyms[0]) || (meaning.synonyms && meaning.synonyms[0]) || null;
+    return {
+      pos: POS_ABBREV[meaning.partOfSpeech] || meaning.partOfSpeech || '',
+      def: def.definition,
+      hint: synonym || null
+    };
+  } catch(e){
+    console.warn('[dictionary] live lookup unavailable for "' + word + '":', e && e.message ? e.message : e);
+    return null;
+  }
+}
+
+async function extractWordsForLesson(){
   state.error = null;
   if(state.contentText.trim().length < 20){
     state.error = state.contentSource === 'upload' ?
@@ -1596,7 +1797,7 @@ function extractWordsForLesson(){
   }
 
   var text = state.contentText.trim();
-  var candidates = extractCandidateWords(text, 30);
+  var candidates = extractCandidateWords(text, 20);
   console.log('[vocab] candidate words:', candidates.map(function(c){ return c.word; }));
   if(candidates.length === 0){
     state.error = 'Could not find any usable words in this passage. Try a longer or different passage.';
@@ -1604,27 +1805,33 @@ function extractWordsForLesson(){
     return;
   }
 
-  candidates.sort(function(a, b){
-    var inBankA = WORD_BANK[a.word] ? 1 : 0;
-    var inBankB = WORD_BANK[b.word] ? 1 : 0;
-    return inBankB - inBankA;
-  });
   var top = candidates.slice(0, 10);
-  console.log('[vocab] picked words (bank matches first):', top.map(function(c){ return c.word + (WORD_BANK[c.word] ? ' (in bank)' : ' (manual)'); }));
 
-  state.draftCards = top.map(function(info){
+  state.loading = true;
+  render();
+
+  var drafts = await Promise.all(top.map(async function(info){
     var contextSentence = info.sentence.length > 160 ? info.sentence.slice(0, 160) + '...' : info.sentence;
     var entry = WORD_BANK[info.word];
+
+    if(!entry){
+      var looked = await tryLiveDictionaryLookup(info.word);
+      if(looked) entry = { pos: looked.pos, def: looked.def, hint: looked.hint };
+    }
+
     return {
       word: info.word,
       partOfSpeech: entry ? entry.pos : '',
       prompt: 'What does "' + info.word + '" mean?',
       standardAnswer: entry ? entry.def : '',
-      hint: entry ? entry.hint : ('Starts with "' + info.word.charAt(0).toUpperCase() + '", ' + info.word.length + ' letters'),
+      hint: buildContextHint(info.word, info.sentence, entry ? entry.hint : null),
       explanation: entry ? entry.def : '',
       contextSentence: contextSentence
     };
-  });
+  }));
+
+  state.draftCards = drafts;
+  state.loading = false;
   state.view = 'wordSetup';
   render();
 }
