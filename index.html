@@ -179,6 +179,18 @@ input, textarea{ font-family:inherit; }
 .src-tab.active{ background:var(--white); color:var(--teal-dark); }
 .source-input-area{ background:var(--white); border:1px solid var(--rule); border-radius:0 8px 8px 8px; padding:16px; }
 
+/* ---------- Word setup (manual fill-in) ---------- */
+.draft-list{ display:flex; flex-direction:column; gap:14px; }
+.draft-card{
+  background:var(--white); border:1px solid var(--line); border-left:3px solid var(--gold);
+  border-radius:var(--radius); padding:14px 16px; display:flex; flex-direction:column; gap:8px;
+}
+.draft-word-row{ display:flex; align-items:center; gap:10px; }
+.draft-word{ font-family:var(--font-system); font-weight:700; font-size:18px; color:var(--ink); flex:1; }
+.draft-pos-input{ max-width:130px; }
+.draft-label{ font-family:var(--font-system); font-size:11px; font-weight:600; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.03em; margin-bottom:-4px; }
+.draft-explanation{ min-height:70px; }
+
 .error-banner{
   background:var(--wrong-bg); color:var(--wrong); border-left:3px solid var(--wrong);
   padding:10px 14px; border-radius:6px; font-size:13px;
@@ -322,10 +334,6 @@ var PRAISES = [
   'That is the right answer.'
 ];
 
-/* IMPORTANT: replace this with your deployed Google Apps Script Web App URL.
-   See Code.gs for the backend source and setup steps. */
-var BACKEND_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyY0i2zDMSAdUH3yEq5SnjAPGp_b6-8SquGyMpyFDvH8dxFKKS-plfOYW2rVmW4fdUH/exec';
-
 var ICON_EDIT = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>';
 var ICON_DELETE = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
 var ICON_DRAG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
@@ -343,7 +351,7 @@ var state = {
   lessonName: '',
   contentSource: 'paste',
   contentText: '',
-  driveLink: '',
+  draftCards: [],
   deck: [],
   currentCardIndex: -1,
   currentAttempt: 0,
@@ -512,6 +520,7 @@ function render(){
   else if(state.view === 'studentDetail') html = renderStudentDetail();
   else if(state.view === 'lessonReview') html = renderLessonReview();
   else if(state.view === 'newLesson') html = renderNewLesson();
+  else if(state.view === 'wordSetup') html = renderWordSetup();
   else if(state.view === 'deck') html = renderDeckView();
   else if(state.view === 'results') html = renderResults();
 
@@ -748,7 +757,6 @@ function startNewLesson(){
   state.lessonName = 'New Lesson ' + formatDate(Date.now());
   state.contentSource = 'paste';
   state.contentText = '';
-  state.driveLink = '';
   state.error = null;
   var reviewWords = getReviewWords();
   if(reviewWords.length > 0){
@@ -787,23 +795,19 @@ function setContentSource(t){ state.contentSource = t; state.error = null; rende
 
 function renderNewLesson(){
   var student = state.students.find(function(s){ return s.id === state.currentStudentId; });
-  var tabs = ['paste','upload','drive'];
-  var labels = { paste:'Paste Text', upload:'Upload File', drive:'Google Drive' };
+  var tabs = ['paste','upload'];
+  var labels = { paste:'Paste Text', upload:'Upload File' };
   var tabsHtml = tabs.map(function(t){
     return '<button class="src-tab ' + (state.contentSource === t ? 'active' : '') + '" onclick="setContentSource(\'' + t + '\')">' + labels[t] + '</button>';
   }).join('');
 
   var inputArea = '';
   if(state.contentSource === 'paste'){
-    inputArea = '<textarea class="text-area" placeholder="Paste the lesson passage here..." oninput="state.contentText=this.value">' + esc(state.contentText) + '</textarea>' +
-      '<p class="hint-text">Keep passages under about 4000 characters (roughly 700-800 words) for reliable results.</p>';
-  } else if(state.contentSource === 'upload'){
-    inputArea = '<input type="file" id="fileInput" accept=".txt,.md,.docx" onchange="handleFileUpload(this)" class="file-input" />' +
-      '<p class="hint-text">Supports .txt, .md, .docx files (best kept under about 4000 characters). For other formats, use "Paste Text" instead.</p>' +
-      (state.contentText ? '<div class="file-preview">Loaded ' + state.contentText.length + ' characters' + (state.contentText.length > 4000 ? ' (only the first 4000 will be used)' : '') + '</div>' : '');
+    inputArea = '<textarea class="text-area" placeholder="Paste the lesson passage here..." oninput="state.contentText=this.value">' + esc(state.contentText) + '</textarea>';
   } else {
-    inputArea = '<input type="text" class="text-input" placeholder="Paste a Google Drive file link" value="' + esc(state.driveLink) + '" oninput="state.driveLink=this.value" />' +
-      '<p class="hint-text">Make sure this file is in the Google Drive account connected to your backend (Google Doc or plain text file).</p>';
+    inputArea = '<input type="file" id="fileInput" accept=".txt,.md,.docx" onchange="handleFileUpload(this)" class="file-input" />' +
+      '<p class="hint-text">Supports .txt, .md, .docx files. For other formats, use "Paste Text" instead.</p>' +
+      (state.contentText ? '<div class="file-preview">Loaded ' + state.contentText.length + ' characters</div>' : '');
   }
 
   return '<div class="screen lesson-setup-screen">' +
@@ -813,7 +817,7 @@ function renderNewLesson(){
     '<div class="source-tabs">' + tabsHtml + '</div>' +
     '<div class="source-input-area">' + inputArea + '</div>' +
     (state.error ? '<div class="error-banner">' + esc(state.error) + '</div>' : '') +
-    '<button class="btn btn-teal btn-generate" onclick="generateVocabCards()">Generate Vocab Cards</button>' +
+    '<button class="btn btn-teal btn-generate" onclick="extractWordsForLesson()">Pick Words from Passage</button>' +
   '</div>';
 }
 
@@ -835,7 +839,7 @@ async function handleFileUpload(fileInput){
         state.error = null;
       }
     } else {
-      state.error = 'Only .txt, .md, and .docx files are supported. For other formats, use "Paste Text" or "Google Drive" instead.';
+      state.error = 'Only .txt, .md, and .docx files are supported. For other formats, use "Paste Text" instead.';
     }
   } catch(e){
     state.error = 'File read failed: ' + (e && e.message ? e.message : 'Please check the file format.');
@@ -843,83 +847,841 @@ async function handleFileUpload(fileInput){
   render();
 }
 
-/* ============ AI vocab generation ============ */
-async function generateVocabCards(){
+/* ============ Word picking + free dictionary lookup (no backend, no AI) ============ */
+var STOPWORDS = {
+  'the':1,'a':1,'an':1,'is':1,'are':1,'was':1,'were':1,'be':1,'been':1,'being':1,
+  'of':1,'to':1,'in':1,'on':1,'at':1,'and':1,'but':1,'or':1,'nor':1,'for':1,'so':1,
+  'yet':1,'with':1,'without':1,'from':1,'by':1,'as':1,'that':1,'this':1,'these':1,
+  'those':1,'it':1,'its':1,'he':1,'she':1,'they':1,'them':1,'his':1,'her':1,'their':1,
+  'you':1,'your':1,'i':1,'we':1,'our':1,'us':1,'my':1,'me':1,'not':1,'no':1,'do':1,
+  'does':1,'did':1,'have':1,'has':1,'had':1,'will':1,'would':1,'can':1,'could':1,
+  'should':1,'shall':1,'may':1,'might':1,'must':1,'if':1,'then':1,'than':1,'also':1,
+  'just':1,'very':1,'more':1,'most':1,'some':1,'any':1,'all':1,'each':1,'other':1,
+  'such':1,'only':1,'own':1,'same':1,'too':1,'now':1,'up':1,'down':1,'out':1,'about':1,
+  'into':1,'over':1,'under':1,'again':1,'once':1,'here':1,'there':1,'when':1,'where':1,
+  'why':1,'how':1,'what':1,'which':1,'who':1,'whom':1,'am':1,'were':1
+};
+
+/* Built-in word bank: definitions written directly (not scraped from any
+   website), covering common intermediate/advanced vocabulary so most lessons
+   need little or no manual typing. Falls back to manual fill-in for any
+   word not covered here. */
+var WORD_BANK = {
+  abandon:{pos:'v.',def:'To leave something or someone completely.',hint:'Give up on'},
+  ability:{pos:'n.',def:'The power or skill to do something.',hint:'Skill'},
+  absence:{pos:'n.',def:'The state of being away from a place.',hint:'Opposite of presence'},
+  absolute:{pos:'adj.',def:'Complete and total.',hint:'Total'},
+  absorb:{pos:'v.',def:'To take in a liquid, gas, or idea.',hint:'Soak up'},
+  abstract:{pos:'adj.',def:'Existing as an idea, not a physical thing.',hint:'Not concrete'},
+  abundant:{pos:'adj.',def:'Existing in large amounts.',hint:'Plentiful'},
+  accept:{pos:'v.',def:'To agree to receive or believe something.',hint:'Agree to take'},
+  access:{pos:'n.',def:'The ability to enter or use something.',hint:'Entry'},
+  accompany:{pos:'v.',def:'To go somewhere with someone.',hint:'Go along with'},
+  accomplish:{pos:'v.',def:'To succeed in doing something.',hint:'Achieve'},
+  account:{pos:'n.',def:'A report or description of an event.',hint:'Description'},
+  accurate:{pos:'adj.',def:'Correct and exact.',hint:'Precise'},
+  achieve:{pos:'v.',def:'To successfully complete or reach a goal.',hint:'Accomplish'},
+  acknowledge:{pos:'v.',def:'To accept that something is true.',hint:'Admit'},
+  acquire:{pos:'v.',def:'To get or obtain something.',hint:'Obtain'},
+  adapt:{pos:'v.',def:'To change to fit a new situation.',hint:'Adjust'},
+  addition:{pos:'n.',def:'The act of adding something.',hint:'Extra part'},
+  address:{pos:'v.',def:'To deal with or speak about a problem.',hint:'Deal with'},
+  adequate:{pos:'adj.',def:'Enough for a particular purpose.',hint:'Sufficient'},
+  adjust:{pos:'v.',def:'To change slightly to fit better.',hint:'Fine-tune'},
+  admire:{pos:'v.',def:'To respect and approve of someone.',hint:'Look up to'},
+  admit:{pos:'v.',def:'To agree, often reluctantly, that something is true.',hint:'Confess'},
+  adopt:{pos:'v.',def:'To choose to use a method, or to take a child as your own.',hint:'Take on'},
+  advance:{pos:'v.',def:'To move forward or improve.',hint:'Progress'},
+  advantage:{pos:'n.',def:'Something that helps you succeed.',hint:'Benefit'},
+  adventure:{pos:'n.',def:'An exciting or dangerous experience.',hint:'Exciting journey'},
+  advice:{pos:'n.',def:'A suggestion about what someone should do.',hint:'Guidance'},
+  affect:{pos:'v.',def:'To influence or change something.',hint:'Influence'},
+  afford:{pos:'v.',def:'To have enough money or time for something.',hint:'Can pay for'},
+  agency:{pos:'n.',def:'A business that provides a particular service.',hint:'Organization'},
+  agenda:{pos:'n.',def:'A list of things to be discussed or done.',hint:'Plan list'},
+  aggressive:{pos:'adj.',def:'Ready to attack or behave forcefully.',hint:'Forceful'},
+  agriculture:{pos:'n.',def:'The practice of farming.',hint:'Farming'},
+  aid:{pos:'n.',def:'Help given to someone in need.',hint:'Help'},
+  aim:{pos:'v.',def:'To plan or intend to do something.',hint:'Intend'},
+  alert:{pos:'adj.',def:'Watching carefully for danger or trouble.',hint:'Watchful'},
+  alliance:{pos:'n.',def:'A union between groups for mutual benefit.',hint:'Partnership'},
+  allow:{pos:'v.',def:'To let something happen.',hint:'Permit'},
+  alter:{pos:'v.',def:'To change something.',hint:'Modify'},
+  alternative:{pos:'n.',def:'Another possible choice.',hint:'Other option'},
+  amaze:{pos:'v.',def:'To surprise someone greatly.',hint:'Astonish'},
+  ambition:{pos:'n.',def:'A strong desire to succeed at something.',hint:'Goal drive'},
+  amount:{pos:'n.',def:'A quantity of something.',hint:'Quantity'},
+  analyze:{pos:'v.',def:'To examine something in detail.',hint:'Examine closely'},
+  ancient:{pos:'adj.',def:'Very old, from a long time ago.',hint:'Very old'},
+  anniversary:{pos:'n.',def:'The date something happened in a previous year.',hint:'Yearly date'},
+  announce:{pos:'v.',def:'To tell people something officially.',hint:'Declare'},
+  annual:{pos:'adj.',def:'Happening once every year.',hint:'Yearly'},
+  anxious:{pos:'adj.',def:'Feeling worried or nervous.',hint:'Worried'},
+  apparent:{pos:'adj.',def:'Clearly seen or understood.',hint:'Obvious'},
+  appeal:{pos:'v.',def:'To be attractive, or to make a formal request.',hint:'Attract'},
+  appear:{pos:'v.',def:'To become visible, or to seem to be true.',hint:'Come into view'},
+  applicable:{pos:'adj.',def:'Relevant or able to be applied.',hint:'Relevant'},
+  apply:{pos:'v.',def:'To make a formal request, or to use something for a purpose.',hint:'Use for a purpose'},
+  appoint:{pos:'v.',def:'To choose someone officially for a job.',hint:'Assign'},
+  appreciate:{pos:'v.',def:'To be grateful for something.',hint:'Be thankful for'},
+  approach:{pos:'v.',def:'To come near to something.',hint:'Come closer'},
+  appropriate:{pos:'adj.',def:'Suitable for a particular situation.',hint:'Suitable'},
+  approve:{pos:'v.',def:'To officially agree to something.',hint:'Agree officially'},
+  approximate:{pos:'adj.',def:'Close to exact but not precise.',hint:'Roughly correct'},
+  architecture:{pos:'n.',def:'The design and style of buildings.',hint:'Building design'},
+  argue:{pos:'v.',def:'To disagree with someone using reasons.',hint:'Disagree with reasons'},
+  arise:{pos:'v.',def:'To happen or begin to exist.',hint:'Come up'},
+  arrange:{pos:'v.',def:'To plan or organize something.',hint:'Organize'},
+  arrival:{pos:'n.',def:'The act of arriving somewhere.',hint:'Coming'},
+  artificial:{pos:'adj.',def:'Made by humans, not occurring naturally.',hint:'Man-made'},
+  aspect:{pos:'n.',def:'A particular part or feature of something.',hint:'Feature'},
+  assemble:{pos:'v.',def:'To gather together or put parts together.',hint:'Put together'},
+  assert:{pos:'v.',def:'To state something firmly and confidently.',hint:'State firmly'},
+  assess:{pos:'v.',def:'To judge the quality or value of something.',hint:'Evaluate'},
+  asset:{pos:'n.',def:'Something valuable that someone owns.',hint:'Valuable thing'},
+  assign:{pos:'v.',def:'To give someone a particular task.',hint:'Give a task'},
+  assist:{pos:'v.',def:'To help someone.',hint:'Help'},
+  associate:{pos:'v.',def:'To connect one thing with another in your mind.',hint:'Connect'},
+  assume:{pos:'v.',def:'To think something is true without proof.',hint:'Suppose'},
+  assure:{pos:'v.',def:'To tell someone confidently that something is true.',hint:'Promise'},
+  attach:{pos:'v.',def:'To fasten or connect one thing to another.',hint:'Connect'},
+  attain:{pos:'v.',def:'To succeed in achieving something.',hint:'Reach a goal'},
+  attempt:{pos:'v.',def:'To try to do something.',hint:'Try'},
+  attend:{pos:'v.',def:'To be present at an event.',hint:'Be present'},
+  attitude:{pos:'n.',def:'A settled way of thinking or feeling about something.',hint:'Mindset'},
+  attract:{pos:'v.',def:'To pull toward, or to cause interest.',hint:'Draw interest'},
+  attribute:{pos:'n.',def:'A quality or feature of someone or something.',hint:'Quality'},
+  authentic:{pos:'adj.',def:'Real and genuine.',hint:'Genuine'},
+  authority:{pos:'n.',def:'The power or right to give orders.',hint:'Power'},
+  automatic:{pos:'adj.',def:'Happening without human control.',hint:'Self-operating'},
+  available:{pos:'adj.',def:'Able to be used or obtained.',hint:'Ready to use'},
+  average:{pos:'adj.',def:'Typical or usual, not extreme.',hint:'Typical'},
+  avoid:{pos:'v.',def:'To stay away from something.',hint:'Stay away from'},
+  aware:{pos:'adj.',def:'Knowing that something exists or is happening.',hint:'Conscious of'},
+  awkward:{pos:'adj.',def:'Causing embarrassment or difficulty.',hint:'Uncomfortable'},
+  barrier:{pos:'n.',def:'Something that blocks movement or progress.',hint:'Obstacle'},
+  basis:{pos:'n.',def:'The foundation or reason for something.',hint:'Foundation'},
+  behave:{pos:'v.',def:'To act in a particular way.',hint:'Act'},
+  belief:{pos:'n.',def:'Something a person accepts as true.',hint:'Conviction'},
+  benefit:{pos:'n.',def:'An advantage gained from something.',hint:'Advantage'},
+  bias:{pos:'n.',def:'An unfair preference for or against something.',hint:'Unfair preference'},
+  blame:{pos:'v.',def:'To say that someone caused something bad.',hint:'Hold responsible'},
+  boost:{pos:'v.',def:'To increase or improve something.',hint:'Increase'},
+  brief:{pos:'adj.',def:'Short in time or length.',hint:'Short'},
+  brilliant:{pos:'adj.',def:'Exceptionally clever or very bright.',hint:'Very smart'},
+  broad:{pos:'adj.',def:'Wide, covering a large area or range.',hint:'Wide'},
+  budget:{pos:'n.',def:'A plan for how money will be spent.',hint:'Money plan'},
+  bulk:{pos:'n.',def:'The main part, or a large quantity.',hint:'Large amount'},
+  burden:{pos:'n.',def:'A heavy load or a difficult responsibility.',hint:'Heavy load'},
+  calculate:{pos:'v.',def:'To find a number or amount using math.',hint:'Compute'},
+  campaign:{pos:'n.',def:'A planned set of activities aimed at a goal.',hint:'Organized effort'},
+  capable:{pos:'adj.',def:'Able to do something well.',hint:'Able'},
+  capacity:{pos:'n.',def:'The maximum amount something can hold or produce.',hint:'Maximum amount'},
+  capture:{pos:'v.',def:'To catch or take control of something.',hint:'Catch'},
+  career:{pos:'n.',def:'A long-term job or profession.',hint:'Profession'},
+  cautious:{pos:'adj.',def:'Careful to avoid danger or mistakes.',hint:'Careful'},
+  challenge:{pos:'n.',def:'A difficult task that tests the ability of a person.',hint:'Difficult task'},
+  characteristic:{pos:'n.',def:'A typical feature of someone or something.',hint:'Typical feature'},
+  circumstance:{pos:'n.',def:'A fact or condition connected to an event.',hint:'Situation'},
+  civil:{pos:'adj.',def:'Relating to citizens, or polite in behavior.',hint:'Polite'},
+  claim:{pos:'v.',def:'To say that something is true.',hint:'Assert'},
+  clarify:{pos:'v.',def:'To make something clearer or easier to understand.',hint:'Make clear'},
+  classic:{pos:'adj.',def:'Traditional and of high quality.',hint:'Timeless'},
+  climate:{pos:'n.',def:'The usual weather conditions of a place.',hint:'Typical weather'},
+  collapse:{pos:'v.',def:'To fall down or fail suddenly.',hint:'Fall down'},
+  collide:{pos:'v.',def:'To hit something while moving.',hint:'Crash into'},
+  combine:{pos:'v.',def:'To join two or more things together.',hint:'Join together'},
+  comment:{pos:'n.',def:'A spoken or written opinion.',hint:'Remark'},
+  commit:{pos:'v.',def:'To promise to do something.',hint:'Dedicate to'},
+  communicate:{pos:'v.',def:'To share information with others.',hint:'Share information'},
+  community:{pos:'n.',def:'A group of people living in the same area.',hint:'Local group'},
+  compare:{pos:'v.',def:'To examine how things are similar or different.',hint:'Examine differences'},
+  compensate:{pos:'v.',def:'To give something to make up for a loss.',hint:'Make up for'},
+  compete:{pos:'v.',def:'To try to win against others.',hint:'Try to win'},
+  complex:{pos:'adj.',def:'Made of many connected parts, hard to understand.',hint:'Complicated'},
+  component:{pos:'n.',def:'One part of a larger system.',hint:'Part'},
+  comprehensive:{pos:'adj.',def:'Including everything that is needed.',hint:'Complete'},
+  comprise:{pos:'v.',def:'To be made up of particular parts.',hint:'Consist of'},
+  conceal:{pos:'v.',def:'To hide something.',hint:'Hide'},
+  concede:{pos:'v.',def:'To admit, often unwillingly, that something is true.',hint:'Admit defeat'},
+  concentrate:{pos:'v.',def:'To focus all attention on one thing.',hint:'Focus'},
+  concept:{pos:'n.',def:'A general idea.',hint:'Idea'},
+  concern:{pos:'n.',def:'A feeling of worry.',hint:'Worry'},
+  conclude:{pos:'v.',def:'To decide something after considering the facts.',hint:'Decide finally'},
+  concrete:{pos:'adj.',def:'Specific and real, not abstract.',hint:'Specific'},
+  condemn:{pos:'v.',def:'To strongly criticize something.',hint:'Strongly criticize'},
+  conduct:{pos:'v.',def:'To organize and carry out an activity.',hint:'Carry out'},
+  confidence:{pos:'n.',def:'A feeling of trust in your own abilities.',hint:'Self-belief'},
+  confine:{pos:'v.',def:'To keep something within limits.',hint:'Restrict'},
+  confirm:{pos:'v.',def:'To state that something is true or certain.',hint:'Verify'},
+  conflict:{pos:'n.',def:'A serious disagreement.',hint:'Disagreement'},
+  conform:{pos:'v.',def:'To behave according to rules or norms.',hint:'Follow rules'},
+  confront:{pos:'v.',def:'To face a difficult situation directly.',hint:'Face directly'},
+  confuse:{pos:'v.',def:'To make someone unable to understand.',hint:'Puzzle'},
+  consent:{pos:'n.',def:'Permission for something to happen.',hint:'Permission'},
+  considerable:{pos:'adj.',def:'Large in amount or importance.',hint:'Significant'},
+  consist:{pos:'v.',def:'To be made up of particular parts.',hint:'Be composed of'},
+  constant:{pos:'adj.',def:'Happening all the time, or staying unchanged.',hint:'Unchanging'},
+  constitute:{pos:'v.',def:'To be a part of a whole, or to form something.',hint:'Form'},
+  constrain:{pos:'v.',def:'To limit or restrict something.',hint:'Restrict'},
+  construct:{pos:'v.',def:'To build something.',hint:'Build'},
+  consult:{pos:'v.',def:'To ask for advice or information.',hint:'Ask advice'},
+  consume:{pos:'v.',def:'To use up or eat something.',hint:'Use up'},
+  contemporary:{pos:'adj.',def:'Existing or happening in the present time.',hint:'Modern'},
+  context:{pos:'n.',def:'The situation that helps explain an event or idea.',hint:'Background'},
+  contract:{pos:'n.',def:'A formal written agreement.',hint:'Agreement'},
+  contradict:{pos:'v.',def:'To say the opposite of what someone said.',hint:'Oppose'},
+  contrary:{pos:'adj.',def:'Completely different or opposite.',hint:'Opposite'},
+  contrast:{pos:'n.',def:'A clear difference between two things.',hint:'Difference'},
+  contribute:{pos:'v.',def:'To give something to help achieve a result.',hint:'Give help'},
+  controversy:{pos:'n.',def:'A public disagreement about an issue.',hint:'Dispute'},
+  convenient:{pos:'adj.',def:'Easy to use or well-suited to your needs.',hint:'Handy'},
+  convert:{pos:'v.',def:'To change something from one form to another.',hint:'Transform'},
+  convince:{pos:'v.',def:'To persuade someone that something is true.',hint:'Persuade'},
+  cooperate:{pos:'v.',def:'To work together with others.',hint:'Work together'},
+  coordinate:{pos:'v.',def:'To organize different parts so they work well together.',hint:'Organize together'},
+  core:{pos:'n.',def:'The central or most important part of something.',hint:'Center'},
+  corporate:{pos:'adj.',def:'Relating to a large company.',hint:'Company-related'},
+  correspond:{pos:'v.',def:'To match or be similar to something.',hint:'Match'},
+  council:{pos:'n.',def:'A group of people who manage or advise.',hint:'Governing group'},
+  counter:{pos:'v.',def:'To oppose or respond to something.',hint:'Oppose'},
+  courage:{pos:'n.',def:'The ability to face danger or fear.',hint:'Bravery'},
+  crash:{pos:'v.',def:'To hit violently, or to fail suddenly.',hint:'Collide'},
+  create:{pos:'v.',def:'To make something new.',hint:'Make new'},
+  credible:{pos:'adj.',def:'Able to be believed.',hint:'Believable'},
+  credit:{pos:'n.',def:'Recognition given for an achievement.',hint:'Recognition'},
+  crisis:{pos:'n.',def:'A time of great danger or difficulty.',hint:'Emergency'},
+  criteria:{pos:'n.',def:'Standards used to judge something.',hint:'Standards'},
+  critical:{pos:'adj.',def:'Very important, or expressing disapproval.',hint:'Crucial'},
+  crucial:{pos:'adj.',def:'Extremely important.',hint:'Essential'},
+  cultivate:{pos:'v.',def:'To grow plants, or to develop a skill over time.',hint:'Develop'},
+  curious:{pos:'adj.',def:'Eager to know or learn something.',hint:'Inquisitive'},
+  currency:{pos:'n.',def:'The money used in a particular country.',hint:'Money'},
+  current:{pos:'adj.',def:'Happening or existing now.',hint:'Present'},
+  decade:{pos:'n.',def:'A period of ten years.',hint:'Ten years'},
+  decline:{pos:'v.',def:'To become smaller, weaker, or worse.',hint:'Decrease'},
+  dedicate:{pos:'v.',def:'To give time and effort to a particular purpose.',hint:'Devote'},
+  defeat:{pos:'v.',def:'To win against someone.',hint:'Beat'},
+  defect:{pos:'n.',def:'A fault or imperfection.',hint:'Flaw'},
+  defend:{pos:'v.',def:'To protect from attack or criticism.',hint:'Protect'},
+  define:{pos:'v.',def:'To state the exact meaning of something.',hint:'Explain meaning'},
+  definite:{pos:'adj.',def:'Certain and clearly known.',hint:'Certain'},
+  demonstrate:{pos:'v.',def:'To show something clearly by giving proof.',hint:'Show clearly'},
+  dense:{pos:'adj.',def:'Having parts packed closely together.',hint:'Thick'},
+  deny:{pos:'v.',def:'To say that something is not true.',hint:'Refuse to admit'},
+  depart:{pos:'v.',def:'To leave a place.',hint:'Leave'},
+  depict:{pos:'v.',def:'To show or represent something in a picture or words.',hint:'Portray'},
+  depress:{pos:'v.',def:'To make someone feel sad.',hint:'Make sad'},
+  deprive:{pos:'v.',def:'To take something away from someone.',hint:'Take away from'},
+  derive:{pos:'v.',def:'To obtain something from a particular source.',hint:'Come from'},
+  descend:{pos:'v.',def:'To move downward.',hint:'Go down'},
+  describe:{pos:'v.',def:'To say what something is like.',hint:'Explain what it is like'},
+  desperate:{pos:'adj.',def:'Feeling that you have little or no hope.',hint:'Hopeless'},
+  destination:{pos:'n.',def:'The place someone is traveling to.',hint:'Final stop'},
+  destroy:{pos:'v.',def:'To damage something so badly it no longer exists.',hint:'Ruin'},
+  detect:{pos:'v.',def:'To discover or notice something.',hint:'Discover'},
+  determine:{pos:'v.',def:'To decide something firmly.',hint:'Decide'},
+  devastate:{pos:'v.',def:'To destroy or severely harm something.',hint:'Destroy severely'},
+  develop:{pos:'v.',def:'To grow or become more advanced.',hint:'Grow'},
+  device:{pos:'n.',def:'A machine or tool made for a particular purpose.',hint:'Tool'},
+  devote:{pos:'v.',def:'To give time or effort to something.',hint:'Dedicate'},
+  diminish:{pos:'v.',def:'To become smaller or less important.',hint:'Decrease'},
+  disaster:{pos:'n.',def:'A sudden event causing great damage.',hint:'Catastrophe'},
+  discipline:{pos:'n.',def:'Training that produces self-control.',hint:'Self-control'},
+  disclose:{pos:'v.',def:'To make secret information known.',hint:'Reveal'},
+  discourage:{pos:'v.',def:'To make someone less confident or enthusiastic.',hint:'Dishearten'},
+  dispute:{pos:'n.',def:'A disagreement or argument.',hint:'Argument'},
+  disrupt:{pos:'v.',def:'To interrupt the normal flow of something.',hint:'Interrupt'},
+  distinct:{pos:'adj.',def:'Clearly different or separate.',hint:'Clearly different'},
+  distinguish:{pos:'v.',def:'To recognize the difference between things.',hint:'Tell apart'},
+  distribute:{pos:'v.',def:'To give something out to many people.',hint:'Hand out'},
+  diverse:{pos:'adj.',def:'Showing a variety of different types.',hint:'Varied'},
+  document:{pos:'n.',def:'A piece of written or printed information.',hint:'Written record'},
+  domestic:{pos:'adj.',def:'Relating to the home or your own country.',hint:'Home-related'},
+  dominant:{pos:'adj.',def:'Most powerful, important, or influential.',hint:'Most powerful'},
+  donate:{pos:'v.',def:'To give something to help others.',hint:'Give freely'},
+  draft:{pos:'n.',def:'An early version of a piece of writing.',hint:'Early version'},
+  dramatic:{pos:'adj.',def:'Sudden and striking, or theatrical.',hint:'Striking'},
+  drastic:{pos:'adj.',def:'Extreme and severe.',hint:'Extreme'},
+  durable:{pos:'adj.',def:'Able to last a long time without damage.',hint:'Long-lasting'},
+  duration:{pos:'n.',def:'The length of time something lasts.',hint:'Length of time'},
+  eager:{pos:'adj.',def:'Very keen and enthusiastic to do something.',hint:'Enthusiastic'},
+  economic:{pos:'adj.',def:'Relating to money, trade, and industry.',hint:'Financial'},
+  edge:{pos:'n.',def:'The outer boundary or limit of something.',hint:'Border'},
+  effective:{pos:'adj.',def:'Producing the result that was intended.',hint:'Successful'},
+  efficient:{pos:'adj.',def:'Working well without wasting time or resources.',hint:'Productive'},
+  elaborate:{pos:'adj.',def:'Detailed and carefully worked out.',hint:'Detailed'},
+  element:{pos:'n.',def:'A basic part of something.',hint:'Basic part'},
+  eliminate:{pos:'v.',def:'To completely remove or get rid of something.',hint:'Remove completely'},
+  embarrass:{pos:'v.',def:'To make someone feel ashamed or uncomfortable.',hint:'Make ashamed'},
+  emerge:{pos:'v.',def:'To come out, or to become known.',hint:'Come out'},
+  emotion:{pos:'n.',def:'A strong feeling.',hint:'Feeling'},
+  emphasis:{pos:'n.',def:'Special importance given to something.',hint:'Special importance'},
+  employ:{pos:'v.',def:'To give someone a paid job.',hint:'Hire'},
+  enable:{pos:'v.',def:'To make something possible.',hint:'Make possible'},
+  encounter:{pos:'v.',def:'To meet someone or something unexpectedly.',hint:'Meet unexpectedly'},
+  encourage:{pos:'v.',def:'To give someone support or confidence.',hint:'Support'},
+  enforce:{pos:'v.',def:'To make people obey a rule or law.',hint:'Make people obey'},
+  engage:{pos:'v.',def:'To take part in something, or to attract interest.',hint:'Take part'},
+  enhance:{pos:'v.',def:'To improve the quality of something.',hint:'Improve'},
+  enormous:{pos:'adj.',def:'Extremely large.',hint:'Huge'},
+  ensure:{pos:'v.',def:'To make certain that something happens.',hint:'Make certain'},
+  enthusiasm:{pos:'n.',def:'Strong excitement or interest in something.',hint:'Excitement'},
+  entire:{pos:'adj.',def:'Whole, with no part left out.',hint:'Whole'},
+  entitle:{pos:'v.',def:'To give someone the right to have something.',hint:'Give the right'},
+  environment:{pos:'n.',def:'The natural world, or the conditions around someone.',hint:'Surroundings'},
+  equip:{pos:'v.',def:'To provide with the necessary items.',hint:'Provide with tools'},
+  equivalent:{pos:'adj.',def:'Equal in value, meaning, or effect.',hint:'Equal'},
+  erode:{pos:'v.',def:'To gradually wear away.',hint:'Wear away'},
+  error:{pos:'n.',def:'A mistake.',hint:'Mistake'},
+  essential:{pos:'adj.',def:'Absolutely necessary.',hint:'Necessary'},
+  establish:{pos:'v.',def:'To set up something on a firm and lasting basis.',hint:'Set up'},
+  estimate:{pos:'v.',def:'To roughly calculate a value or amount.',hint:'Roughly calculate'},
+  ethical:{pos:'adj.',def:'Relating to what is morally right.',hint:'Morally right'},
+  evaluate:{pos:'v.',def:'To judge the value or quality of something.',hint:'Assess'},
+  eventual:{pos:'adj.',def:'Happening at the end of a process.',hint:'Final'},
+  evidence:{pos:'n.',def:'Facts or signs that show something is true.',hint:'Proof'},
+  evident:{pos:'adj.',def:'Easily seen or understood.',hint:'Obvious'},
+  evolve:{pos:'v.',def:'To develop gradually over time.',hint:'Develop gradually'},
+  exceed:{pos:'v.',def:'To be greater than a limit or expectation.',hint:'Go beyond'},
+  exception:{pos:'n.',def:'Something that does not follow the usual rule.',hint:'Not the usual case'},
+  excessive:{pos:'adj.',def:'More than what is normal or necessary.',hint:'Too much'},
+  exclude:{pos:'v.',def:'To leave something or someone out.',hint:'Leave out'},
+  executive:{pos:'n.',def:'A person with a senior managing role.',hint:'Senior manager'},
+  exhaust:{pos:'v.',def:'To make someone very tired, or to use something up completely.',hint:'Tire out'},
+  exhibit:{pos:'v.',def:'To show something publicly.',hint:'Display'},
+  exotic:{pos:'adj.',def:'Unusual and coming from a foreign country.',hint:'Unusual foreign'},
+  expand:{pos:'v.',def:'To become larger.',hint:'Grow larger'},
+  expertise:{pos:'n.',def:'Special skill or knowledge in a particular area.',hint:'Skill'},
+  explicit:{pos:'adj.',def:'Stated clearly and openly.',hint:'Clearly stated'},
+  exploit:{pos:'v.',def:'To use something or someone unfairly for your own benefit.',hint:'Use unfairly'},
+  expose:{pos:'v.',def:'To reveal or make something visible.',hint:'Reveal'},
+  extend:{pos:'v.',def:'To make something longer, larger, or last longer.',hint:'Stretch'},
+  extensive:{pos:'adj.',def:'Covering a large area or a wide scope.',hint:'Wide-ranging'},
+  external:{pos:'adj.',def:'Coming from or existing outside something.',hint:'Outside'},
+  extract:{pos:'v.',def:'To remove or take out something.',hint:'Remove'},
+  extreme:{pos:'adj.',def:'Very great in degree or intensity.',hint:'Very intense'},
+  facilitate:{pos:'v.',def:'To make an action or process easier.',hint:'Make easier'},
+  factor:{pos:'n.',def:'Something that influences a result.',hint:'Influencing element'},
+  fascinate:{pos:'v.',def:'To strongly attract and hold the interest of others.',hint:'Captivate'},
+  fatal:{pos:'adj.',def:'Causing death.',hint:'Deadly'},
+  feature:{pos:'n.',def:'A distinctive part or quality of something.',hint:'Distinctive part'},
+  federal:{pos:'adj.',def:'Relating to a central national government.',hint:'National'},
+  fee:{pos:'n.',def:'A payment made for a service.',hint:'Payment'},
+  finance:{pos:'n.',def:'The management of money.',hint:'Money management'},
+  finite:{pos:'adj.',def:'Having limits or an end.',hint:'Limited'},
+  flexible:{pos:'adj.',def:'Able to change or adapt easily.',hint:'Adaptable'},
+  flourish:{pos:'v.',def:'To grow or develop successfully.',hint:'Thrive'},
+  focus:{pos:'v.',def:'To give special attention to something specific.',hint:'Concentrate'},
+  forecast:{pos:'v.',def:'To predict what will happen in the future.',hint:'Predict'},
+  foreign:{pos:'adj.',def:'Coming from or existing in another country.',hint:'From abroad'},
+  formal:{pos:'adj.',def:'Following established rules or customs.',hint:'Official'},
+  former:{pos:'adj.',def:'Happening or existing before now.',hint:'Previous'},
+  formula:{pos:'n.',def:'A fixed method, or a set of symbols in mathematics.',hint:'Fixed method'},
+  foster:{pos:'v.',def:'To encourage the development of something.',hint:'Encourage growth'},
+  foundation:{pos:'n.',def:'The basis on which something is built.',hint:'Basis'},
+  fragile:{pos:'adj.',def:'Easily broken or damaged.',hint:'Delicate'},
+  framework:{pos:'n.',def:'A basic structure that supports a system or idea.',hint:'Basic structure'},
+  frequency:{pos:'n.',def:'How often something happens.',hint:'Rate of occurrence'},
+  frustrate:{pos:'v.',def:'To prevent someone from achieving something, causing annoyance.',hint:'Annoy'},
+  fundamental:{pos:'adj.',def:'Forming a necessary base or core part.',hint:'Basic'},
+  fusion:{pos:'n.',def:'The joining of different things into one.',hint:'Joining together'},
+  gender:{pos:'n.',def:'The state of being male, female, or another identity.',hint:'Sex category'},
+  generate:{pos:'v.',def:'To produce or create something.',hint:'Produce'},
+  generous:{pos:'adj.',def:'Willing to give freely.',hint:'Giving freely'},
+  genuine:{pos:'adj.',def:'Real and authentic, not fake.',hint:'Authentic'},
+  global:{pos:'adj.',def:'Relating to the whole world.',hint:'Worldwide'},
+  govern:{pos:'v.',def:'To officially control and direct a country or area.',hint:'Rule'},
+  gradual:{pos:'adj.',def:'Happening slowly over a period of time.',hint:'Slow and steady'},
+  grant:{pos:'v.',def:'To formally give or allow something.',hint:'Give formally'},
+  grateful:{pos:'adj.',def:'Feeling or showing thanks.',hint:'Thankful'},
+  guarantee:{pos:'v.',def:'To promise that something will happen or be true.',hint:'Promise'},
+  guideline:{pos:'n.',def:'A rule or piece of advice about how to do something.',hint:'Rule of guidance'},
+  harsh:{pos:'adj.',def:'Severe, cruel, or unpleasant.',hint:'Severe'},
+  hazard:{pos:'n.',def:'A danger or risk.',hint:'Danger'},
+  hesitate:{pos:'v.',def:'To pause before doing or saying something.',hint:'Pause before acting'},
+  hierarchy:{pos:'n.',def:'A system that ranks people by importance.',hint:'Ranking system'},
+  horizon:{pos:'n.',def:'The line where the earth appears to meet the sky.',hint:'Skyline'},
+  hostile:{pos:'adj.',def:'Unfriendly and ready to fight or argue.',hint:'Unfriendly'},
+  humid:{pos:'adj.',def:'Containing a lot of moisture in the air.',hint:'Damp'},
+  hypothesis:{pos:'n.',def:'An idea suggested as a possible explanation.',hint:'Proposed explanation'},
+  identical:{pos:'adj.',def:'Exactly the same.',hint:'Exactly alike'},
+  identify:{pos:'v.',def:'To recognize or establish exactly who or what something is.',hint:'Recognize'},
+  ignore:{pos:'v.',def:'To pay no attention to something.',hint:'Pay no attention'},
+  illustrate:{pos:'v.',def:'To explain something using examples or pictures.',hint:'Explain with examples'},
+  image:{pos:'n.',def:'A picture, or a mental impression of something.',hint:'Picture'},
+  imitate:{pos:'v.',def:'To copy the behavior or actions of another person.',hint:'Copy'},
+  immense:{pos:'adj.',def:'Extremely large.',hint:'Huge'},
+  immune:{pos:'adj.',def:'Protected against a disease or a harmful effect.',hint:'Protected'},
+  impact:{pos:'n.',def:'A powerful effect on someone or something.',hint:'Strong effect'},
+  implement:{pos:'v.',def:'To put a plan or decision into action.',hint:'Carry out'},
+  implicit:{pos:'adj.',def:'Suggested but not directly stated.',hint:'Implied'},
+  imply:{pos:'v.',def:'To suggest something without saying it directly.',hint:'Suggest indirectly'},
+  impose:{pos:'v.',def:'To force a rule, tax, or belief to be accepted.',hint:'Force upon'},
+  incentive:{pos:'n.',def:'Something that encourages a person to act.',hint:'Motivation'},
+  incident:{pos:'n.',def:'An event, often unpleasant or unusual.',hint:'Event'},
+  include:{pos:'v.',def:'To have something as part of a whole.',hint:'Contain'},
+  income:{pos:'n.',def:'Money received regularly, such as from work.',hint:'Earnings'},
+  incorporate:{pos:'v.',def:'To include something as part of a whole.',hint:'Include'},
+  indicate:{pos:'v.',def:'To point out or show something.',hint:'Show'},
+  individual:{pos:'n.',def:'A single person.',hint:'Single person'},
+  induce:{pos:'v.',def:'To cause something to happen.',hint:'Cause'},
+  industry:{pos:'n.',def:'Economic activity involving the production of goods.',hint:'Economic sector'},
+  inevitable:{pos:'adj.',def:'Certain to happen and unable to be avoided.',hint:'Unavoidable'},
+  infer:{pos:'v.',def:'To reach a conclusion based on evidence.',hint:'Deduce'},
+  infinite:{pos:'adj.',def:'Without any limits or end.',hint:'Endless'},
+  influence:{pos:'n.',def:'The power to affect someone or something.',hint:'Effect on'},
+  inform:{pos:'v.',def:'To give someone information.',hint:'Tell'},
+  ingredient:{pos:'n.',def:'One of the parts used to make something.',hint:'Component'},
+  inhabit:{pos:'v.',def:'To live in a particular place.',hint:'Live in'},
+  initial:{pos:'adj.',def:'Happening at the beginning.',hint:'First'},
+  initiate:{pos:'v.',def:'To start something.',hint:'Begin'},
+  innovate:{pos:'v.',def:'To introduce new ideas or methods.',hint:'Introduce new ideas'},
+  inquiry:{pos:'n.',def:'A request for information, or an investigation.',hint:'Investigation'},
+  insight:{pos:'n.',def:'A clear and deep understanding of something.',hint:'Understanding'},
+  insist:{pos:'v.',def:'To demand something firmly.',hint:'Demand firmly'},
+  inspect:{pos:'v.',def:'To examine something closely.',hint:'Examine closely'},
+  inspire:{pos:'v.',def:'To fill someone with a strong desire to do something.',hint:'Motivate'},
+  instance:{pos:'n.',def:'A particular example of something.',hint:'Example'},
+  instinct:{pos:'n.',def:'A natural tendency to behave in a certain way.',hint:'Natural tendency'},
+  institute:{pos:'n.',def:'An organization set up for a particular purpose.',hint:'Organization'},
+  instruct:{pos:'v.',def:'To teach someone, or to give orders.',hint:'Teach'},
+  integral:{pos:'adj.',def:'Necessary to make a whole thing complete.',hint:'Essential part'},
+  integrate:{pos:'v.',def:'To combine separate parts into a whole.',hint:'Combine'},
+  intense:{pos:'adj.',def:'Existing in an extreme degree.',hint:'Extreme'},
+  intent:{pos:'n.',def:'A plan or purpose in mind.',hint:'Purpose'},
+  interact:{pos:'v.',def:'To communicate or work with others.',hint:'Engage with others'},
+  interfere:{pos:'v.',def:'To get involved in something without being asked.',hint:'Meddle'},
+  interpret:{pos:'v.',def:'To explain the meaning of something.',hint:'Explain meaning'},
+  interval:{pos:'n.',def:'A period of time between two events.',hint:'Time gap'},
+  intervene:{pos:'v.',def:'To become involved in a situation to change it.',hint:'Step in'},
+  intimate:{pos:'adj.',def:'Very close and personal.',hint:'Very close'},
+  invade:{pos:'v.',def:'To enter a place by force.',hint:'Enter by force'},
+  invest:{pos:'v.',def:'To put money into something for future benefit.',hint:'Put money in'},
+  investigate:{pos:'v.',def:'To examine something carefully to find out facts.',hint:'Examine carefully'},
+  involve:{pos:'v.',def:'To include something as a necessary part.',hint:'Include'},
+  irony:{pos:'n.',def:'A situation with an unexpected, often contrary, outcome.',hint:'Unexpected contrast'},
+  isolate:{pos:'v.',def:'To separate something or someone from others.',hint:'Separate'},
+  issue:{pos:'n.',def:'An important topic for discussion or debate.',hint:'Important topic'},
+  justify:{pos:'v.',def:'To show that something is right or reasonable.',hint:'Give reasons for'},
+  keen:{pos:'adj.',def:'Having a strong interest or enthusiasm.',hint:'Enthusiastic'},
+  label:{pos:'n.',def:'A piece of information attached to something.',hint:'Tag'},
+  labor:{pos:'n.',def:'Hard physical or mental work.',hint:'Work'},
+  landscape:{pos:'n.',def:'The visible features of an area of land.',hint:'Scenery'},
+  launch:{pos:'v.',def:'To start something new, such as a product.',hint:'Start'},
+  lecture:{pos:'n.',def:'A talk given to teach people about a subject.',hint:'Educational talk'},
+  legitimate:{pos:'adj.',def:'Allowed by law or accepted rules.',hint:'Lawful'},
+  liberal:{pos:'adj.',def:'Open to new ideas and tolerant of others.',hint:'Open-minded'},
+  license:{pos:'n.',def:'Official permission to do something.',hint:'Official permission'},
+  limitation:{pos:'n.',def:'A restriction on what is possible.',hint:'Restriction'},
+  literal:{pos:'adj.',def:'Following the exact meaning of words.',hint:'Exact meaning'},
+  literature:{pos:'n.',def:'Written works, especially those with artistic value.',hint:'Written works'},
+  locate:{pos:'v.',def:'To find the exact position of something.',hint:'Find position'},
+  logic:{pos:'n.',def:'Reasoning carried out according to strict rules.',hint:'Reasoning'},
+  magnitude:{pos:'n.',def:'The great size or importance of something.',hint:'Great size'},
+  maintain:{pos:'v.',def:'To keep something in the same good state.',hint:'Keep up'},
+  mandatory:{pos:'adj.',def:'Required by a law or a rule.',hint:'Compulsory'},
+  manipulate:{pos:'v.',def:'To control or influence something skillfully.',hint:'Control cleverly'},
+  manual:{pos:'adj.',def:'Operated by hand rather than a machine.',hint:'By hand'},
+  manufacture:{pos:'v.',def:'To make goods on a large scale using machines.',hint:'Produce'},
+  margin:{pos:'n.',def:'The edge of something, or an extra amount allowed.',hint:'Edge'},
+  mature:{pos:'adj.',def:'Fully developed, like an adult.',hint:'Fully grown'},
+  maximum:{pos:'adj.',def:'The greatest amount or level possible.',hint:'Greatest amount'},
+  mechanism:{pos:'n.',def:'A system of parts that work together.',hint:'System of parts'},
+  mediate:{pos:'v.',def:'To help two sides settle a disagreement.',hint:'Help settle disputes'},
+  mental:{pos:'adj.',def:'Relating to the mind.',hint:'Mind-related'},
+  mention:{pos:'v.',def:'To speak or write about something briefly.',hint:'Refer to briefly'},
+  merge:{pos:'v.',def:'To combine two or more things into one.',hint:'Combine'},
+  migrate:{pos:'v.',def:'To move from one place or country to another.',hint:'Move location'},
+  minimal:{pos:'adj.',def:'As small in amount as possible.',hint:'Very small'},
+  minimum:{pos:'adj.',def:'The smallest amount possible.',hint:'Smallest amount'},
+  minor:{pos:'adj.',def:'Not very important or serious.',hint:'Small importance'},
+  mission:{pos:'n.',def:'An important task or a sense of purpose.',hint:'Important task'},
+  mobile:{pos:'adj.',def:'Able to move or be moved easily.',hint:'Movable'},
+  moderate:{pos:'adj.',def:'Average in amount, not extreme.',hint:'Average'},
+  modify:{pos:'v.',def:'To make small changes to something.',hint:'Change slightly'},
+  moral:{pos:'adj.',def:'Relating to what is right and wrong.',hint:'Ethical'},
+  motive:{pos:'n.',def:'A reason for doing something.',hint:'Reason'},
+  mutual:{pos:'adj.',def:'Shared or felt equally by two or more people.',hint:'Shared'},
+  naive:{pos:'adj.',def:'Lacking experience or worldly wisdom.',hint:'Innocent'},
+  narrative:{pos:'n.',def:'A spoken or written account of events.',hint:'Story'},
+  navigate:{pos:'v.',def:'To plan and direct a route or path.',hint:'Find a way'},
+  negative:{pos:'adj.',def:'Expressing disagreement, or lacking good qualities.',hint:'Not positive'},
+  neglect:{pos:'v.',def:'To fail to take care of something properly.',hint:'Fail to care for'},
+  negotiate:{pos:'v.',def:'To discuss something in order to reach an agreement.',hint:'Bargain'},
+  neutral:{pos:'adj.',def:'Not supporting either side in a disagreement.',hint:'Unbiased'},
+  norm:{pos:'n.',def:'A standard or usual way of behaving.',hint:'Standard'},
+  notion:{pos:'n.',def:'A belief or idea.',hint:'Idea'},
+  notable:{pos:'adj.',def:'Worthy of attention or notice.',hint:'Noteworthy'},
+  nuclear:{pos:'adj.',def:'Relating to the nucleus of an atom, or to nuclear weapons.',hint:'Atomic'},
+  nutrient:{pos:'n.',def:'A substance that provides nourishment.',hint:'Nourishing substance'},
+  objective:{pos:'n.',def:'A goal that someone is trying to achieve.',hint:'Goal'},
+  observe:{pos:'v.',def:'To watch someone or something carefully.',hint:'Watch carefully'},
+  obstacle:{pos:'n.',def:'Something that blocks progress.',hint:'Barrier'},
+  obtain:{pos:'v.',def:'To get something.',hint:'Get'},
+  obvious:{pos:'adj.',def:'Easy to see or understand.',hint:'Clear'},
+  occupy:{pos:'v.',def:'To fill a space, or to hold a position.',hint:'Fill space'},
+  occur:{pos:'v.',def:'To happen.',hint:'Happen'},
+  odd:{pos:'adj.',def:'Strange or unusual.',hint:'Strange'},
+  offend:{pos:'v.',def:'To cause someone to feel upset or hurt.',hint:'Upset someone'},
+  ongoing:{pos:'adj.',def:'Continuing to happen or exist.',hint:'Continuing'},
+  operate:{pos:'v.',def:'To work, or to control a machine or system.',hint:'Run'},
+  opponent:{pos:'n.',def:'A person who competes against another.',hint:'Rival'},
+  opportunity:{pos:'n.',def:'A chance to do something.',hint:'Chance'},
+  oppose:{pos:'v.',def:'To disagree with something and try to stop it.',hint:'Resist'},
+  option:{pos:'n.',def:'A choice that is available.',hint:'Choice'},
+  origin:{pos:'n.',def:'The point where something begins.',hint:'Source'},
+  outcome:{pos:'n.',def:'The result of an event or action.',hint:'Result'},
+  outline:{pos:'n.',def:'A general description or summary.',hint:'Summary'},
+  output:{pos:'n.',def:'The amount of something produced.',hint:'Production amount'},
+  overall:{pos:'adj.',def:'Including everything, taken as a whole.',hint:'Total'},
+  overcome:{pos:'v.',def:'To successfully deal with a problem.',hint:'Get past'},
+  overlook:{pos:'v.',def:'To fail to notice something.',hint:'Miss noticing'},
+  overwhelm:{pos:'v.',def:'To affect someone so strongly they cannot cope.',hint:'Overpower'},
+  parallel:{pos:'adj.',def:'Similar and happening at the same time.',hint:'Similar and simultaneous'},
+  participate:{pos:'v.',def:'To take part in an activity.',hint:'Take part'},
+  partnership:{pos:'n.',def:'A relationship where people work together.',hint:'Collaboration'},
+  passion:{pos:'n.',def:'A very strong feeling or enthusiasm.',hint:'Strong feeling'},
+  passive:{pos:'adj.',def:'Accepting what happens without resistance.',hint:'Not active'},
+  peculiar:{pos:'adj.',def:'Strange or unusual.',hint:'Unusual'},
+  perceive:{pos:'v.',def:'To become aware of something through the senses.',hint:'Notice'},
+  perception:{pos:'n.',def:'The way something is noticed or understood.',hint:'Understanding'},
+  permanent:{pos:'adj.',def:'Lasting forever, not temporary.',hint:'Lasting forever'},
+  permit:{pos:'v.',def:'To allow something to happen.',hint:'Allow'},
+  perspective:{pos:'n.',def:'A particular way of viewing things.',hint:'Viewpoint'},
+  persuade:{pos:'v.',def:'To cause someone to believe or do something.',hint:'Convince'},
+  phase:{pos:'n.',def:'A stage in a process of change.',hint:'Stage'},
+  phenomenon:{pos:'n.',def:'A fact or event that can be observed.',hint:'Observable event'},
+  philosophy:{pos:'n.',def:'The study of fundamental questions about life and knowledge.',hint:'Study of ideas'},
+  physical:{pos:'adj.',def:'Relating to the body or the material world.',hint:'Bodily'},
+  portion:{pos:'n.',def:'A part of a whole.',hint:'Part'},
+  positive:{pos:'adj.',def:'Good, favorable, or expressing certainty.',hint:'Good, favorable'},
+  possess:{pos:'v.',def:'To own or have something.',hint:'Own'},
+  potential:{pos:'adj.',def:'Capable of becoming something in the future.',hint:'Possible future'},
+  practical:{pos:'adj.',def:'Useful and sensible, not theoretical.',hint:'Useful'},
+  precede:{pos:'v.',def:'To happen or exist before something else.',hint:'Come before'},
+  precise:{pos:'adj.',def:'Exact and accurate.',hint:'Exact'},
+  predict:{pos:'v.',def:'To say what will happen in the future.',hint:'Forecast'},
+  preliminary:{pos:'adj.',def:'Happening before the main part of something.',hint:'Introductory'},
+  presume:{pos:'v.',def:'To assume that something is true.',hint:'Assume'},
+  prevail:{pos:'v.',def:'To prove more powerful and succeed.',hint:'Win out'},
+  previous:{pos:'adj.',def:'Happening or existing before the one now being discussed.',hint:'Earlier'},
+  primary:{pos:'adj.',def:'Most important, or first in order.',hint:'Main'},
+  principal:{pos:'adj.',def:'Most important.',hint:'Main'},
+  principle:{pos:'n.',def:'A basic rule that guides behavior.',hint:'Basic rule'},
+  prior:{pos:'adj.',def:'Existing or happening before something else.',hint:'Earlier'},
+  priority:{pos:'n.',def:'Something treated as more important than others.',hint:'Top importance'},
+  proceed:{pos:'v.',def:'To continue with an action or process.',hint:'Go ahead'},
+  process:{pos:'n.',def:'A series of actions taken to achieve a result.',hint:'Series of steps'},
+  proclaim:{pos:'v.',def:'To announce something publicly.',hint:'Declare publicly'},
+  profound:{pos:'adj.',def:'Very great, deep, or intense.',hint:'Deep and intense'},
+  prohibit:{pos:'v.',def:'To formally forbid something.',hint:'Forbid'},
+  project:{pos:'n.',def:'A planned piece of work with a goal.',hint:'Planned work'},
+  prominent:{pos:'adj.',def:'Important and well-known.',hint:'Notable'},
+  promote:{pos:'v.',def:'To support, encourage, or help something grow.',hint:'Support'},
+  prompt:{pos:'adj.',def:'Done quickly and without delay.',hint:'Quick'},
+  proportion:{pos:'n.',def:'A part of something in relation to the whole.',hint:'Relative amount'},
+  propose:{pos:'v.',def:'To suggest a plan or idea.',hint:'Suggest'},
+  prospect:{pos:'n.',def:'The possibility of future success.',hint:'Future possibility'},
+  protest:{pos:'v.',def:'To express strong disagreement.',hint:'Object strongly'},
+  provoke:{pos:'v.',def:'To cause a reaction, often anger.',hint:'Cause a reaction'},
+  psychology:{pos:'n.',def:'The scientific study of the mind and behavior.',hint:'Study of mind'},
+  publish:{pos:'v.',def:'To make written information available to the public.',hint:'Release publicly'},
+  pursue:{pos:'v.',def:'To continue trying to achieve something.',hint:'Chase after'},
+  qualify:{pos:'v.',def:'To have the right skills, or to meet requirements.',hint:'Meet requirements'},
+  quantity:{pos:'n.',def:'An amount of something that can be measured.',hint:'Amount'},
+  query:{pos:'n.',def:'A question, especially one expressing doubt.',hint:'Question'},
+  random:{pos:'adj.',def:'Happening without a plan or pattern.',hint:'Without pattern'},
+  range:{pos:'n.',def:'The limits between which something varies.',hint:'Variety span'},
+  rank:{pos:'n.',def:'A position within a hierarchy.',hint:'Position level'},
+  rare:{pos:'adj.',def:'Not happening or found often.',hint:'Uncommon'},
+  ratio:{pos:'n.',def:'A relationship between two amounts, shown as numbers.',hint:'Proportion'},
+  rational:{pos:'adj.',def:'Based on reason rather than emotion.',hint:'Logical'},
+  react:{pos:'v.',def:'To respond to something that happens.',hint:'Respond'},
+  realm:{pos:'n.',def:'A particular area of activity or interest.',hint:'Domain'},
+  rebel:{pos:'v.',def:'To resist or fight against authority.',hint:'Resist authority'},
+  recall:{pos:'v.',def:'To remember something.',hint:'Remember'},
+  recede:{pos:'v.',def:'To move back or gradually become weaker.',hint:'Move backward'},
+  recession:{pos:'n.',def:'A period when the economy of a country declines.',hint:'Economic decline'},
+  recognize:{pos:'v.',def:'To identify someone or something known before.',hint:'Identify'},
+  recommend:{pos:'v.',def:'To suggest that something is good or suitable.',hint:'Suggest'},
+  reconcile:{pos:'v.',def:'To settle a disagreement between people.',hint:'Settle differences'},
+  recover:{pos:'v.',def:'To return to a normal state after illness or difficulty.',hint:'Get better'},
+  refer:{pos:'v.',def:'To mention or direct attention to something.',hint:'Mention'},
+  reflect:{pos:'v.',def:'To think carefully, or to show an image of something.',hint:'Think carefully'},
+  reform:{pos:'v.',def:'To make changes in order to improve something.',hint:'Improve by changing'},
+  refuse:{pos:'v.',def:'To say no to something.',hint:'Decline'},
+  regard:{pos:'v.',def:'To consider or think of something in a particular way.',hint:'Consider'},
+  region:{pos:'n.',def:'An area of a country or the world.',hint:'Area'},
+  register:{pos:'v.',def:'To record something officially.',hint:'Record officially'},
+  regulate:{pos:'v.',def:'To control something using rules.',hint:'Control by rules'},
+  reinforce:{pos:'v.',def:'To make something stronger.',hint:'Strengthen'},
+  reject:{pos:'v.',def:'To refuse to accept something.',hint:'Refuse to accept'},
+  relevant:{pos:'adj.',def:'Closely connected to the matter being discussed.',hint:'Connected, applicable'},
+  reliable:{pos:'adj.',def:'Able to be trusted to do what is expected.',hint:'Trustworthy'},
+  relieve:{pos:'v.',def:'To make pain or worry less severe.',hint:'Ease'},
+  reluctant:{pos:'adj.',def:'Unwilling to do something.',hint:'Unwilling'},
+  rely:{pos:'v.',def:'To depend on someone or something.',hint:'Depend on'},
+  remark:{pos:'n.',def:'A spoken comment or observation.',hint:'Comment'},
+  remarkable:{pos:'adj.',def:'Worthy of attention because it is unusual.',hint:'Extraordinary'},
+  remote:{pos:'adj.',def:'Far away in distance.',hint:'Far away'},
+  remove:{pos:'v.',def:'To take something away or off.',hint:'Take away'},
+  render:{pos:'v.',def:'To cause something to be in a certain state.',hint:'Make/cause'},
+  renowned:{pos:'adj.',def:'Famous for a particular quality or skill.',hint:'Famous'},
+  represent:{pos:'v.',def:'To act or speak officially for someone.',hint:'Act on behalf of'},
+  require:{pos:'v.',def:'To need something.',hint:'Need'},
+  rescue:{pos:'v.',def:'To save someone from danger.',hint:'Save from danger'},
+  resemble:{pos:'v.',def:'To look like or be similar to something.',hint:'Look similar to'},
+  reserve:{pos:'v.',def:'To keep something for future use.',hint:'Keep for later'},
+  reside:{pos:'v.',def:'To live in a particular place.',hint:'Live in'},
+  resign:{pos:'v.',def:'To formally give up a job or position.',hint:'Quit'},
+  resist:{pos:'v.',def:'To refuse to accept something, or to fight against it.',hint:'Fight against'},
+  resolve:{pos:'v.',def:'To find a solution to a problem.',hint:'Solve'},
+  resource:{pos:'n.',def:'A supply of something useful or valuable.',hint:'Useful supply'},
+  respond:{pos:'v.',def:'To answer or react to something.',hint:'Answer'},
+  restore:{pos:'v.',def:'To bring something back to an earlier condition.',hint:'Bring back'},
+  restrain:{pos:'v.',def:'To hold back or control someone or something.',hint:'Hold back'},
+  restrict:{pos:'v.',def:'To limit something.',hint:'Limit'},
+  retain:{pos:'v.',def:'To continue to have or keep something.',hint:'Keep'},
+  reveal:{pos:'v.',def:'To make known something that was secret.',hint:'Uncover'},
+  revenue:{pos:'n.',def:'Money received by a business or government.',hint:'Income'},
+  reverse:{pos:'v.',def:'To change something to the opposite direction or effect.',hint:'Turn back'},
+  revise:{pos:'v.',def:'To change something in order to improve it.',hint:'Change to improve'},
+  revive:{pos:'v.',def:'To bring something back to life or activity.',hint:'Bring back to life'},
+  revolution:{pos:'n.',def:'A fundamental change, or an uprising against a government.',hint:'Fundamental change'},
+  rigid:{pos:'adj.',def:'Unable to bend, or very strict.',hint:'Strict, stiff'},
+  route:{pos:'n.',def:'A path taken to get from one place to another.',hint:'Path'},
+  routine:{pos:'n.',def:'A regular and fixed way of doing things.',hint:'Regular procedure'},
+  rural:{pos:'adj.',def:'Relating to the countryside.',hint:'Countryside-related'},
+  sacrifice:{pos:'v.',def:'To give up something valuable for a greater purpose.',hint:'Give up for a cause'},
+  scarce:{pos:'adj.',def:'Not enough to meet the demand for it.',hint:'In short supply'},
+  scenario:{pos:'n.',def:'A possible sequence of future events.',hint:'Possible situation'},
+  scheme:{pos:'n.',def:'A plan of action.',hint:'Plan'},
+  scope:{pos:'n.',def:'The range of a subject or activity.',hint:'Range'},
+  secure:{pos:'adj.',def:'Safe from danger or risk.',hint:'Safe'},
+  seek:{pos:'v.',def:'To try to find or obtain something.',hint:'Search for'},
+  segment:{pos:'n.',def:'One part of something that is divided.',hint:'Part or section'},
+  sequence:{pos:'n.',def:'A particular order in which events happen.',hint:'Order'},
+  significant:{pos:'adj.',def:'Important or meaningful.',hint:'Important'},
+  similar:{pos:'adj.',def:'Alike but not exactly the same.',hint:'Alike'},
+  simultaneous:{pos:'adj.',def:'Happening at exactly the same time.',hint:'At the same time'},
+  sole:{pos:'adj.',def:'Being the only one.',hint:'Only'},
+  solid:{pos:'adj.',def:'Firm and stable, not liquid or gas.',hint:'Firm'},
+  sophisticated:{pos:'adj.',def:'Highly developed or complex.',hint:'Highly developed'},
+  source:{pos:'n.',def:'The place something comes from.',hint:'Origin'},
+  spectrum:{pos:'n.',def:'A range of related qualities or ideas.',hint:'Range'},
+  sphere:{pos:'n.',def:'An area of activity, or a round shape.',hint:'Area of activity'},
+  stable:{pos:'adj.',def:'Firmly fixed and not likely to change.',hint:'Steady'},
+  statistic:{pos:'n.',def:'A piece of numerical data.',hint:'Numerical data'},
+  status:{pos:'n.',def:'The position or condition of a person or thing.',hint:'Position, condition'},
+  straightforward:{pos:'adj.',def:'Simple and easy to understand.',hint:'Simple'},
+  strategy:{pos:'n.',def:'A plan designed to achieve a goal.',hint:'Plan'},
+  strict:{pos:'adj.',def:'Demanding that rules are obeyed.',hint:'Rigid rules'},
+  structure:{pos:'n.',def:'The way the parts of something are organized.',hint:'Organization'},
+  struggle:{pos:'v.',def:'To try hard to do something difficult.',hint:'Try hard'},
+  submit:{pos:'v.',def:'To hand something in, or to give in to authority.',hint:'Hand in'},
+  subsequent:{pos:'adj.',def:'Coming after something in time.',hint:'Following'},
+  substance:{pos:'n.',def:'A physical material, or the essential meaning of something.',hint:'Material'},
+  substantial:{pos:'adj.',def:'Large in size, value, or importance.',hint:'Considerable'},
+  substitute:{pos:'n.',def:'A person or thing used in place of another.',hint:'Replacement'},
+  subtle:{pos:'adj.',def:'Not obvious, delicate or precise.',hint:'Not obvious'},
+  succeed:{pos:'v.',def:'To achieve a desired goal.',hint:'Achieve a goal'},
+  sufficient:{pos:'adj.',def:'Enough for a particular purpose.',hint:'Enough'},
+  suggest:{pos:'v.',def:'To put forward an idea for consideration.',hint:'Propose'},
+  summary:{pos:'n.',def:'A brief statement of the main points.',hint:'Brief overview'},
+  superior:{pos:'adj.',def:'Higher in quality, rank, or status.',hint:'Higher quality'},
+  supplement:{pos:'n.',def:'Something added to complete or improve a thing.',hint:'Addition'},
+  suppress:{pos:'v.',def:'To stop something by force.',hint:'Hold back forcefully'},
+  supreme:{pos:'adj.',def:'Highest in rank, power, or quality.',hint:'Highest'},
+  surge:{pos:'v.',def:'To increase suddenly and greatly.',hint:'Increase suddenly'},
+  surplus:{pos:'n.',def:'An amount that is more than what is needed.',hint:'Extra amount'},
+  survey:{pos:'n.',def:'A study carried out to collect information.',hint:'Study, poll'},
+  suspend:{pos:'v.',def:'To stop something temporarily.',hint:'Pause temporarily'},
+  sustain:{pos:'v.',def:'To keep something going over a long time.',hint:'Maintain over time'},
+  symbol:{pos:'n.',def:'Something that represents an idea.',hint:'Representative sign'},
+  sympathy:{pos:'n.',def:'Understanding and care for the suffering of others.',hint:'Compassion'},
+  tackle:{pos:'v.',def:'To try to deal with a difficult problem.',hint:'Deal with'},
+  tedious:{pos:'adj.',def:'Long, slow, and boring.',hint:'Boring'},
+  temporary:{pos:'adj.',def:'Lasting for a limited amount of time.',hint:'Not permanent'},
+  tend:{pos:'v.',def:'To be likely to behave in a particular way.',hint:'Be likely to'},
+  tense:{pos:'adj.',def:'Feeling nervous and unable to relax.',hint:'Nervous'},
+  tension:{pos:'n.',def:'A feeling of unease, worry, or strain.',hint:'Strain'},
+  terminate:{pos:'v.',def:'To bring something to an end.',hint:'End'},
+  territory:{pos:'n.',def:'An area of land, especially one under the control of a ruler.',hint:'Land area'},
+  theme:{pos:'n.',def:'The main subject or idea of a piece of work.',hint:'Main subject'},
+  theory:{pos:'n.',def:'An idea intended to explain something.',hint:'Explanatory idea'},
+  thorough:{pos:'adj.',def:'Complete and carried out with great care.',hint:'Complete and careful'},
+  threat:{pos:'n.',def:'A statement or sign of possible danger.',hint:'Danger sign'},
+  tolerate:{pos:'v.',def:'To accept something without complaint, even if you dislike it.',hint:'Put up with'},
+  trace:{pos:'v.',def:'To find or follow the origin of something.',hint:'Track the origin'},
+  tradition:{pos:'n.',def:'A custom or belief passed down through generations.',hint:'Custom'},
+  transfer:{pos:'v.',def:'To move something from one place to another.',hint:'Move'},
+  transform:{pos:'v.',def:'To change something completely.',hint:'Change completely'},
+  transition:{pos:'n.',def:'A change from one state or stage to another.',hint:'Change of state'},
+  transmit:{pos:'v.',def:'To send or pass something on.',hint:'Send'},
+  transparent:{pos:'adj.',def:'Easy to see through, or easy to understand.',hint:'Clear, open'},
+  tremendous:{pos:'adj.',def:'Very great in amount, size, or degree.',hint:'Huge'},
+  trend:{pos:'n.',def:'A general direction in which something is changing.',hint:'General direction'},
+  trigger:{pos:'v.',def:'To cause something to happen or start.',hint:'Set off'},
+  trivial:{pos:'adj.',def:'Of little importance or value.',hint:'Unimportant'},
+  typical:{pos:'adj.',def:'Showing the usual features of a particular type.',hint:'Usual'},
+  ultimate:{pos:'adj.',def:'Being the final one, or the best of its kind.',hint:'Final, best'},
+  undergo:{pos:'v.',def:'To experience something, often something difficult.',hint:'Go through'},
+  undermine:{pos:'v.',def:'To gradually weaken something.',hint:'Weaken gradually'},
+  underlying:{pos:'adj.',def:'Being the basic cause or nature of something.',hint:'Basic, hidden cause'},
+  undertake:{pos:'v.',def:'To commit to doing a task.',hint:'Take on a task'},
+  uniform:{pos:'adj.',def:'The same in every case, not varying.',hint:'Consistent'},
+  unique:{pos:'adj.',def:'Being the only one of its kind.',hint:'One of a kind'},
+  urban:{pos:'adj.',def:'Relating to a city or town.',hint:'City-related'},
+  urge:{pos:'v.',def:'To strongly encourage someone to do something.',hint:'Strongly encourage'},
+  utilize:{pos:'v.',def:'To make practical use of something.',hint:'Use effectively'},
+  vague:{pos:'adj.',def:'Not clear or precise in meaning.',hint:'Unclear'},
+  valid:{pos:'adj.',def:'Legally or logically acceptable.',hint:'Acceptable, sound'},
+  vanish:{pos:'v.',def:'To disappear suddenly and completely.',hint:'Disappear'},
+  variable:{pos:'adj.',def:'Likely to change often.',hint:'Changeable'},
+  various:{pos:'adj.',def:'Of several different kinds.',hint:'Several different'},
+  vary:{pos:'v.',def:'To be different, or to change.',hint:'Differ'},
+  vast:{pos:'adj.',def:'Extremely large in area or amount.',hint:'Huge'},
+  verify:{pos:'v.',def:'To confirm that something is true or accurate.',hint:'Confirm true'},
+  version:{pos:'n.',def:'A particular form of something that differs from other forms.',hint:'Particular form'},
+  violate:{pos:'v.',def:'To break a law, rule, or agreement.',hint:'Break a rule'},
+  virtual:{pos:'adj.',def:'Existing in effect, though not in physical form.',hint:'Not physical'},
+  vision:{pos:'n.',def:'The ability to see, or a plan for the future.',hint:'Eyesight, plan'},
+  visible:{pos:'adj.',def:'Able to be seen.',hint:'Able to be seen'},
+  vital:{pos:'adj.',def:'Absolutely necessary for something to succeed or exist.',hint:'Essential'},
+  volume:{pos:'n.',def:'The amount of space something occupies, or the loudness of sound.',hint:'Amount of space'},
+  voluntary:{pos:'adj.',def:'Done by choice, not because you are forced to.',hint:'By choice'},
+  vulnerable:{pos:'adj.',def:'Easily harmed, hurt, or attacked.',hint:'Easily harmed'},
+  warn:{pos:'v.',def:'To tell someone about a possible danger.',hint:'Alert to danger'},
+  weird:{pos:'adj.',def:'Very strange or unusual.',hint:'Very strange'},
+  welfare:{pos:'n.',def:'The health, happiness, and safety of a person or group.',hint:'Well-being'},
+  widespread:{pos:'adj.',def:'Happening or existing over a large area.',hint:'Common, broad'},
+  withdraw:{pos:'v.',def:'To remove or take back something.',hint:'Take back'},
+  witness:{pos:'v.',def:'To see something happen.',hint:'See happen'}
+};
+
+function extractCandidateWords(text, count){
+  var sentences = text.match(/[^.!?]+[.!?]*/g) || [text];
+  var info = {};
+
+  sentences.forEach(function(sentence){
+    var words = sentence.match(/[A-Za-z']+/g) || [];
+    words.forEach(function(w){
+      var lower = w.toLowerCase();
+      if(lower.length < 4 || STOPWORDS[lower]) return;
+      if(!info[lower]){
+        info[lower] = { word: lower, count: 0, sentence: sentence.trim() };
+      }
+      info[lower].count++;
+    });
+  });
+
+  var candidates = Object.keys(info).map(function(k){ return info[k]; });
+  candidates.sort(function(a, b){
+    var scoreA = a.word.length * 2 - Math.abs(a.count - 2);
+    var scoreB = b.word.length * 2 - Math.abs(b.count - 2);
+    return scoreB - scoreA;
+  });
+  return candidates.slice(0, count);
+}
+
+function extractWordsForLesson(){
   state.error = null;
-  if(state.contentSource === 'paste' && state.contentText.trim().length < 20){
-    state.error = 'The passage is too short. Please paste at least one full paragraph.';
-    render();
-    return;
-  }
-  if(state.contentSource === 'upload' && state.contentText.trim().length < 20){
-    state.error = 'The file content could not be read yet. Please re-upload, or use "Paste Text" instead.';
-    render();
-    return;
-  }
-  if(state.contentSource === 'drive' && !state.driveLink.trim()){
-    state.error = 'Please paste a Google Drive file link.';
-    render();
-    return;
-  }
-  if(!BACKEND_ENDPOINT || BACKEND_ENDPOINT.indexOf('PASTE_YOUR') === 0){
-    state.error = 'Backend not configured yet. Deploy Code.gs as a Web App and paste its URL into BACKEND_ENDPOINT in this file.';
+  if(state.contentText.trim().length < 20){
+    state.error = state.contentSource === 'upload' ?
+      'The file content could not be read yet. Please re-upload, or use "Paste Text" instead.' :
+      'The passage is too short. Please paste at least one full paragraph.';
     render();
     return;
   }
 
-  state.loading = true;
+  var text = state.contentText.trim();
+  var candidates = extractCandidateWords(text, 30);
+  console.log('[vocab] candidate words:', candidates.map(function(c){ return c.word; }));
+  if(candidates.length === 0){
+    state.error = 'Could not find any usable words in this passage. Try a longer or different passage.';
+    render();
+    return;
+  }
+
+  candidates.sort(function(a, b){
+    var inBankA = WORD_BANK[a.word] ? 1 : 0;
+    var inBankB = WORD_BANK[b.word] ? 1 : 0;
+    return inBankB - inBankA;
+  });
+  var top = candidates.slice(0, 10);
+  console.log('[vocab] picked words (bank matches first):', top.map(function(c){ return c.word + (WORD_BANK[c.word] ? ' (in bank)' : ' (manual)'); }));
+
+  state.draftCards = top.map(function(info){
+    var contextSentence = info.sentence.length > 160 ? info.sentence.slice(0, 160) + '...' : info.sentence;
+    var entry = WORD_BANK[info.word];
+    return {
+      word: info.word,
+      partOfSpeech: entry ? entry.pos : '',
+      prompt: 'What does "' + info.word + '" mean?',
+      standardAnswer: entry ? entry.def : '',
+      hint: entry ? entry.hint : ('Starts with "' + info.word.charAt(0).toUpperCase() + '", ' + info.word.length + ' letters'),
+      explanation: entry ? entry.def : '',
+      contextSentence: contextSentence
+    };
+  });
+  state.view = 'wordSetup';
   render();
+}
 
-  try{
-    var params = new URLSearchParams();
-    params.set('mode', state.contentSource);
-    if(state.contentSource === 'drive'){
-      params.set('driveLink', state.driveLink.trim());
-    } else {
-      params.set('content', state.contentText.trim().slice(0, 4000));
-    }
+function backFromWordSetup(){ state.view = 'newLesson'; render(); }
 
-    var res = await fetch(BACKEND_ENDPOINT + '?' + params.toString(), {
-      method: 'GET'
-    });
-    if(!res.ok){
-      throw new Error('The backend is currently unavailable (status code ' + res.status + '). Please try again later.');
-    }
-    var data = await res.json();
-    if(data.error){
-      throw new Error(data.error);
-    }
-    if(!data.cards || !Array.isArray(data.cards) || data.cards.length === 0){
-      throw new Error('No vocabulary words could be selected. Please make sure the passage is long enough (at least 100 words recommended).');
-    }
+function startDeckFromDrafts(){
+  state.deck = shuffle(state.draftCards).map(function(c){
+    return {
+      word: c.word,
+      partOfSpeech: (c.partOfSpeech || '').trim(),
+      contextSentence: c.contextSentence || '',
+      prompt: (c.prompt || '').trim() || ('What does "' + c.word + '" mean?'),
+      standardAnswer: (c.standardAnswer || '').trim() || 'No definition provided',
+      hint: (c.hint || '').trim(),
+      explanation: (c.explanation || '').trim() || (c.standardAnswer || '').trim() || 'No explanation provided',
+      revealed: false,
+      outcome: null,
+      showHint: false,
+      flipped: false,
+      praise: null
+    };
+  });
+  state.currentCardIndex = -1;
+  state.currentAttempt = 0;
+  state.score = 0;
+  state.stage = 'deckWaiting';
+  state.view = 'deck';
+  render();
+}
 
-    state.deck = shuffle(data.cards.slice(0, 10)).map(function(c){
-      return {
-        word: c.word || '',
-        partOfSpeech: c.partOfSpeech || '',
-        contextSentence: c.contextSentence || '',
-        prompt: c.prompt || '',
-        standardAnswer: c.standardAnswer || '',
-        hint: c.hint || '',
-        explanation: c.explanation || '',
-        revealed: false,
-        outcome: null,
-        showHint: false,
-        flipped: false,
-        praise: null
-      };
-    });
-    state.currentCardIndex = -1;
-    state.currentAttempt = 0;
-    state.score = 0;
-    state.stage = 'deckWaiting';
-    state.view = 'deck';
-  } catch(err){
-    state.error = (err && err.message) ? err.message : 'An unknown error occurred. Please try again.';
-  } finally {
-    state.loading = false;
-    render();
-  }
+function renderWordSetup(){
+  var student = state.students.find(function(s){ return s.id === state.currentStudentId; });
+  var rows = state.draftCards.map(function(c, i){
+    return '<div class="draft-card">' +
+      '<div class="draft-word-row">' +
+        '<span class="draft-word">' + esc(c.word) + '</span>' +
+        '<input type="text" class="text-input draft-pos-input" placeholder="n. / v. / adj." value="' + esc(c.partOfSpeech) + '" oninput="state.draftCards[' + i + '].partOfSpeech=this.value" />' +
+      '</div>' +
+      '<label class="draft-label">Question to ask</label>' +
+      '<input type="text" class="text-input" value="' + esc(c.prompt) + '" oninput="state.draftCards[' + i + '].prompt=this.value" />' +
+      '<label class="draft-label">Standard answer / definition</label>' +
+      '<input type="text" class="text-input" placeholder="e.g. a fruit that grows on trees" value="' + esc(c.standardAnswer) + '" oninput="state.draftCards[' + i + '].standardAnswer=this.value" />' +
+      '<label class="draft-label">Hint (shown after first wrong try)</label>' +
+      '<input type="text" class="text-input" value="' + esc(c.hint) + '" oninput="state.draftCards[' + i + '].hint=this.value" />' +
+      '<label class="draft-label">Full explanation (shown after two wrong tries)</label>' +
+      '<textarea class="text-area draft-explanation" placeholder="Optional - defaults to the standard answer if left blank" oninput="state.draftCards[' + i + '].explanation=this.value">' + esc(c.explanation) + '</textarea>' +
+    '</div>';
+  }).join('');
+
+  return '<div class="screen word-setup-screen">' +
+    '<button class="link-btn" onclick="backFromWordSetup()">← Back</button>' +
+    '<div class="setup-title">Fill in the details for ' + esc(student ? student.name : '') + '</div>' +
+    '<p class="app-subtitle">These 10 words were picked from the passage. Common words are pre-filled from a built-in word bank - review them, and fill in any that are still blank.</p>' +
+    '<div class="draft-list">' + rows + '</div>' +
+    '<button class="btn btn-teal btn-generate" onclick="startDeckFromDrafts()">Start Lesson</button>' +
+  '</div>';
 }
 
 /* ============ Deck / gameplay ============ */
